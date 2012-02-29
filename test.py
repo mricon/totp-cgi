@@ -6,9 +6,20 @@ import time
 import json
 import sys
 import os
+import logging
 
 secrets_dir = 'test/secrets'
 status_dir  = 'test/status'
+
+logger = logging.getLogger('totpcgi')
+logger.setLevel(logging.DEBUG)
+
+ch = logging.FileHandler('test.log')
+ch.setLevel(logging.DEBUG)
+formatter = logging.Formatter("[%(levelname)s:%(funcName)s:"
+                              "%(lineno)s] %(message)s")
+ch.setFormatter(formatter)
+logger.addHandler(ch)
 
 class GATest(unittest.TestCase):
 
@@ -77,11 +88,14 @@ class GATest(unittest.TestCase):
             gau.verify_token(token)
 
     def testWindowSize(self):
+        logger.debug('Starting testWindowSize')
         gau = self.getValidUser()
         totp = pyotp.TOTP(gau.totp.secret)
         # get a token from 60 seconds ago
         past_token = totp.at(int(time.time())-60)
         future_token = totp.at(int(time.time())+60)
+        logger.debug('past_token=%s' % past_token)
+        logger.debug('future_token=%s' % future_token)
 
         # this should fail
         gau.window_size = 0
@@ -96,6 +110,13 @@ class GATest(unittest.TestCase):
                 'Valid token within window size used')
         self.assertEqual(gau.verify_token(future_token), 
                 'Valid token within window size used')
+
+        # trying to reuse them should fail
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'been used once'):
+            gau.verify_token(past_token)
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'been used once'):
+            gau.verify_token(future_token)
+        
 
     def testRateLimit(self):
         gau = self.getValidUser()

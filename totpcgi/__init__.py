@@ -9,7 +9,7 @@ import json
 
 from fcntl import flock, LOCK_EX, LOCK_UN
 
-logger = logging.getLogger('totp-cgi')
+logger = logging.getLogger('totpcgi')
 
 SANE_USERNAME_RE = re.compile(r'([\w\.@=+_-]+)')
 
@@ -38,6 +38,9 @@ class GAUser:
 
         self.now_token     = None
         self.now_timestamp = None
+
+        self.used_token     = None
+        self.used_timestamp = None
 
         self.rate_limit  = (3, 30)
         self.window_size = 0
@@ -95,6 +98,8 @@ class GAUser:
 
                 elif line[2:13] == 'WINDOW_SIZE':
                     self.window_size = int(line[14:])
+                    if self.window_size > 0 and self.window_size < 3:
+                        self.window_size = 3
                     logger.debug('window_size=%s' % self.window_size)
 
                 # Ignore DISALLOW_REUSE for now -- we always disallow reuse
@@ -163,10 +168,12 @@ class GAUser:
 
         new_status['used_scratch_tokens'] = status['used_scratch_tokens']
 
+        logger.debug('used_tokens=%s' % used_tokens)
+
         # are you being rate-limited right now?
         for timestamp in status['fail_timestamps']:
             # trim any timestamps that are too old to consider
-            if timestamp < self.now_timestamp-(30+(self.rate_limit[1]*10)):
+            if timestamp < self.now_timestamp-(30+self.rate_limit[1]):
                 continue
 
             new_status['fail_timestamps'].append(timestamp)
@@ -216,15 +223,22 @@ class GAUser:
                             for timestamp in xrange(start, end, 10):
                                 at_token = self.totp.at(timestamp)
                                 if at_token == token:
+                                    self.used_timestamp = timestamp
+                                    self.used_token = token
                                     success = (True, 
                                         'Valid token within window size used')
                                     break
 
             # Adjust status accordingly
-            if success[0] == True:
-                new_status['success_timestamps'].append(self.now_timestamp)
+            if self.used_timestamp:
+                record_timestamp = self.used_timestamp
             else:
-                new_status['fail_timestamps'].append(self.now_timestamp)
+                record_timestamp = self.now_timestamp
+
+            if success[0] == True:
+                new_status['success_timestamps'].append(record_timestamp)
+            else:
+                new_status['fail_timestamps'].append(record_timestamp)
 
         json.dump(new_status, fh, indent=4)
         fh.truncate()

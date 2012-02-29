@@ -2,8 +2,6 @@
 from flup.server import fcgi
 from cgi import parse_qs
 import syslog
-import logging
-import ConfigParser
 
 import totpcgi
 
@@ -56,12 +54,12 @@ def webapp(environ, start_response):
         'Success: user=%s, mode=%s, host=%s, message=%s' % (user, mode, 
             remote_host, status))
 
+    status = 'OK\n' + status
+
     start_response('200 OK', [('Content-type', 'text/plain'),
                               ('Content-Length', str(len(status)))])
-    #
-    # pam_url wants to see a PSK
-    return status
 
+    return status
 
 
 fcgi.WSGIServer(webapp).run()
