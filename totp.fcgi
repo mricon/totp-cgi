@@ -7,8 +7,9 @@ import totpcgi
 
 SECRETS_DIR = '/var/lib/totpcgi/secrets'
 STATUS_DIR  = '/var/lib/totpcgi/status'
+PAM_URL_PSK = 'presharedsecret'
 
-syslog.openlog('totp.fcgi', logoption=syslog.LOG_PID, facility=syslog.LOG_AUTH)
+syslog.openlog('totp.fcgi', syslog.LOG_PID, syslog.LOG_AUTH)
 
 def bad_request(start_response, why):
     output = 'ERR\n' + why + '\n'
@@ -54,7 +55,7 @@ def webapp(environ, start_response):
         'Success: user=%s, mode=%s, host=%s, message=%s' % (user, mode, 
             remote_host, status))
 
-    status = 'OK\n' + status
+    status = PAM_URL_PSK
 
     start_response('200 OK', [('Content-type', 'text/plain'),
                               ('Content-Length', str(len(status)))])

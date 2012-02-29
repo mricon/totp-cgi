@@ -10,10 +10,11 @@ cgitb.enable()
 
 import totpcgi
 
-SECRETS_DIR = '/var/lib/totpcgi/secrets'
-STATUS_DIR  = '/var/lib/totpcgi/status'
+SECRETS_DIR = '/etc/totpcgi/secrets'
+STATUS_DIR  = '/var/lib/totpcgi'
+PAM_URL_PSK = 'presharedsecret'
 
-syslog.openlog('totp.cgi', logoption=syslog.LOG_PID, facility=syslog.LOG_AUTH)
+syslog.openlog('totp.cgi', syslog.LOG_PID, syslog.LOG_AUTH)
 
 def bad_request(why):
     output = 'ERR\n' + why + '\n'
@@ -59,11 +60,10 @@ def cgimain():
 
     sys.stdout.write('Status: 200 OK\n')
     sys.stdout.write('Content-type: text/plain\n')
-    sys.stdout.write('Content-Length: %s\n' % len(status))
+    sys.stdout.write('Content-Length: %s\n' % len(PAM_URL_PSK))
     sys.stdout.write('\n')
 
-    sys.stdout.write('OK\n')
-    sys.stdout.write(status)
+    sys.stdout.write(PAM_URL_PSK)
 
 
 if __name__ == '__main__':
