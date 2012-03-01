@@ -51,8 +51,8 @@ def cgimain():
     except Exception, ex:
         syslog.syslog(syslog.LOG_NOTICE,
             'Failure: user=%s, mode=%s, host=%s, message=%s' % (user, mode, 
-                remote_host, ex.message))
-        bad_request(ex.message)
+                remote_host, str(ex)))
+        bad_request(str(ex))
 
     syslog.syslog(syslog.LOG_NOTICE, 
         'Success: user=%s, mode=%s, host=%s, message=%s' % (user, mode, 

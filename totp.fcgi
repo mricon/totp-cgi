@@ -5,8 +5,8 @@ import syslog
 
 import totpcgi
 
-SECRETS_DIR = '/var/lib/totpcgi/secrets'
-STATUS_DIR  = '/var/lib/totpcgi/status'
+SECRETS_DIR = '/etc/totpcgi/secrets'
+STATUS_DIR  = '/var/lib/totpcgi'
 PAM_URL_PSK = 'presharedsecret'
 
 syslog.openlog('totp.fcgi', syslog.LOG_PID, syslog.LOG_AUTH)
@@ -48,8 +48,8 @@ def webapp(environ, start_response):
     except Exception, ex:
         syslog.syslog(syslog.LOG_NOTICE,
             'Failure: user=%s, mode=%s, host=%s, message=%s' % (user, mode, 
-                remote_host, ex.message))
-        return bad_request(start_response, ex.message)
+                remote_host, str(ex))
+        return bad_request(start_response, str(ex))
 
     syslog.syslog(syslog.LOG_NOTICE, 
         'Success: user=%s, mode=%s, host=%s, message=%s' % (user, mode, 

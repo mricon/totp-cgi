@@ -128,6 +128,9 @@ class GAUser:
                 'used_scratch_tokens': []
                 }
 
+        # Don't let anyone but ourselves see the contents of the status file
+        os.umask(0077)
+
         # we exclusive-lock the file to prevent race conditions resulting
         # in potential token reuse.
         if os.access(status_file, os.R_OK):
