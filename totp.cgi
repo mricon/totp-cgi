@@ -10,9 +10,9 @@ cgitb.enable()
 
 import totpcgi
 
-SECRETS_DIR = '/etc/totpcgi/secrets'
-STATUS_DIR  = '/var/lib/totpcgi'
-PAM_URL_PSK = 'presharedsecret'
+SECRETS_DIR  = '/etc/totpcgi/secrets'
+STATE_DIR    = '/var/lib/totpcgi'
+PAM_URL_CODE = 'OK'
 
 syslog.openlog('totp.cgi', syslog.LOG_PID, syslog.LOG_AUTH)
 
@@ -44,7 +44,10 @@ def cgimain():
     if mode != 'PAM_SM_AUTH':
         bad_request('We only support PAM_SM_AUTH')
 
-    ga = totpcgi.GoogleAuthenticator(SECRETS_DIR, STATUS_DIR)
+    state_be  = totpcgi.GAStateBackendFile(STATE_DIR)
+    secret_be = totpcgi.GASecretBackendFile(SECRETS_DIR)
+
+    ga = totpcgi.GoogleAuthenticator(secret_be, state_be)
 
     try:
         status = ga.verify_user_token(user, token)
@@ -60,10 +63,10 @@ def cgimain():
 
     sys.stdout.write('Status: 200 OK\n')
     sys.stdout.write('Content-type: text/plain\n')
-    sys.stdout.write('Content-Length: %s\n' % len(PAM_URL_PSK))
+    sys.stdout.write('Content-Length: %s\n' % len(PAM_URL_CODE))
     sys.stdout.write('\n')
 
-    sys.stdout.write(PAM_URL_PSK)
+    sys.stdout.write(PAM_URL_CODE)
 
 
 if __name__ == '__main__':

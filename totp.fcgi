@@ -5,9 +5,9 @@ import syslog
 
 import totpcgi
 
-SECRETS_DIR = '/etc/totpcgi/secrets'
-STATUS_DIR  = '/var/lib/totpcgi'
-PAM_URL_PSK = 'presharedsecret'
+SECRETS_DIR  = '/etc/totpcgi/secrets'
+STATE_DIR    = '/var/lib/totpcgi'
+PAM_URL_CODE = 'OK'
 
 syslog.openlog('totp.fcgi', syslog.LOG_PID, syslog.LOG_AUTH)
 
@@ -41,7 +41,10 @@ def webapp(environ, start_response):
     if mode != 'PAM_SM_AUTH':
         return bad_request(start_response, "We only support PAM_SM_AUTH")
 
-    ga = totpcgi.GoogleAuthenticator(SECRETS_DIR, STATUS_DIR)
+    state_be  = totpcgi.GAStateBackendFile(STATE_DIR)
+    secret_be = totpcgi.GASecretBackendFile(SECRETS_DIR)
+
+    ga = totpcgi.GoogleAuthenticator(secret_be, state_be)
 
     try:
         status = ga.verify_user_token(user, token)
@@ -55,7 +58,7 @@ def webapp(environ, start_response):
         'Success: user=%s, mode=%s, host=%s, message=%s' % (user, mode, 
             remote_host, status))
 
-    status = PAM_URL_PSK
+    status = PAM_URL_CODE
 
     start_response('200 OK', [('Content-type', 'text/plain'),
                               ('Content-Length', str(len(status)))])
