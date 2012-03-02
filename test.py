@@ -1,4 +1,22 @@
 #!/usr/bin/python -tt
+##
+# Copyright (C) 2012 by Konstantin Ryabitsev and contributors
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+# 02111-1307, USA.
+#
 import unittest
 
 import pyotp
@@ -14,6 +32,11 @@ import subprocess
 secrets_dir = 'test/secrets'
 state_dir   = 'test/state'
 
+pg_connect_string = ''
+
+STATE_BACKEND  = 'File'
+SECRET_BACKEND = 'File'
+
 logger = logging.getLogger('totpcgi')
 logger.setLevel(logging.DEBUG)
 
@@ -24,14 +47,17 @@ formatter = logging.Formatter("[%(levelname)s:%(funcName)s:"
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
-def getStateBackend(backend='File'):
-    if backend == 'File':
+def getStateBackend():
+    if STATE_BACKEND == 'File':
         state_be = totpcgi.backends.GAStateBackendFile(state_dir)
+
+    elif STATE_BACKEND == 'Postgresql':
+        state_be = totpcgi.backends.GAStateBackendPostgresql(pg_connect_string)
 
     return state_be
 
-def getSecretBackend(backend='File'):
-    if backend == 'File':
+def getSecretBackend():
+    if SECRET_BACKEND == 'File':
         secret_be = totpcgi.backends.GASecretBackendFile(secrets_dir)
 
     return secret_be
@@ -247,9 +273,9 @@ class GATest(unittest.TestCase):
 
     def testTotpCGI(self):
         # Very basic test -- it should return 'user does not exist'
-        # as we cannot currently set SECRETS_DIR on the fly
+        # as we cannot currently set SECRETS_DIR in the cgi on the fly
         os.environ['REMOTE_ADDR'] = '127.0.0.1'
-        os.environ['QUERY_STRING'] = 'user=bupkis&token=%s&mode=PAM_SM_AUTH'
+        os.environ['QUERY_STRING'] = 'user=bupkis&token=555555&mode=PAM_SM_AUTH'
 
         command = ['env', 'python', 'totp.cgi']
 
@@ -257,8 +283,12 @@ class GATest(unittest.TestCase):
 
         self.assertRegexpMatches(ret, 'bupkis.totp does not exist')
 
-
-
-
 if __name__ == '__main__':
+    # To test postgresql backend, do:
+    # export pg_connect_string='blah blah'
+    if 'pg_connect_string' in os.environ.keys():
+        STATE_BACKEND = 'Postgresql'
+        pg_connect_string = os.environ['pg_connect_string']
+
     unittest.main()
+
