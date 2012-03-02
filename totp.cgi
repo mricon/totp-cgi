@@ -29,7 +29,7 @@ cgitb.enable()
 import totpcgi
 import totpcgi.backends
 
-SECRETS_DIR  = '/etc/totpcgi/secrets'
+SECRETS_DIR  = '/etc/totpcgi'
 STATE_DIR    = '/var/lib/totpcgi'
 PAM_URL_CODE = 'OK'
 
