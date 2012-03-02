@@ -41,6 +41,11 @@ class UserStateError(exceptions.Exception):
         exceptions.Exception.__init__(self, message)
         logger.debug('!UserStateError: %s' % message)
 
+class UserPincodeError(exceptions.Exception):
+    def __init__(self, message):
+        exceptions.Exception.__init__(self, message)
+        logger.debug('!UserPincodeError: %s' % message)
+
 class VerifyFailed(exceptions.Exception):
     def __init__(self, message):
         exceptions.Exception.__init__(self, message)
@@ -82,7 +87,35 @@ class GAUser:
         self.user   = user
         self.secret = secret_backend.get_user_secret(user)
         
-        self.state_backend = state_backend
+        self.state_backend  = state_backend
+        self.secret_backend = secret_backend
+
+    def verify_pincode(self, pincode):
+        hashcode = self.secret_backend.get_user_hashcode(self.user)
+
+        try:
+            (junk, algo, salt, junk) = hashcode.split('$', 3)
+        except ValueError:
+            raise UserPincodeError('Unsupported hashcode format')
+
+        if algo not in ('1', '5', '6', '2a'):
+            raise UserPincodeError('Unsupported hashcode format: %s' % algo)
+
+        if algo == '2a':
+            logger.debug('$2a$ found, will use bcrypt')
+
+            import bcrypt
+            if bcrypt.hashpw(pincode, hashcode) != hashcode:
+                raise UserPincodeError('Pincode did not match.')
+        else:
+            logger.debug('$%s$ found, will use crypt' % algo)
+
+            import crypt
+            salt_str = '$%s$%s' % (algo, salt)
+            if crypt.crypt(pincode, salt_str) != hashcode:
+                raise UserPincodeError('Pincode did not match.')
+
+        return True
 
     def verify_token(self, token):
         state = self.state_backend.get_user_state(self.user)
@@ -190,12 +223,66 @@ class GAUser:
 
 class GoogleAuthenticator:
 
-    def __init__(self, secret_backend, state_backend):
-        self.secret_backend = secret_backend
-        self.state_backend  = state_backend
+    def __init__(self, secret_backend, state_backend, require_pincode=False):
+        self.secret_backend  = secret_backend
+        self.state_backend   = state_backend
+        self.require_pincode = require_pincode
 
     def verify_user_token(self, user, token):
         user = GAUser(user, self.secret_backend, self.state_backend)
-        return user.verify_token(token)
+        # let's figure out if it's:
+        #  1. regular 6-digit token
+        #  2. 8-digit scratch-code
+        #  3. pincode+6-digit token
+        #  4. pincode+8-digit scratch-code
 
+        if len(token) <= 6:
+            logger.debug('Regular 6-digit token used')
+            if self.require_pincode:
+                raise UserPincodeError('Pincode is required')
+
+            return user.verify_token(token)
+
+        if len(token) == 8:
+            # is it a valid integer?
+            try:
+                itoken = int(token)
+                # is it among user's valid scratch tokens?
+                if itoken in user.secret.scratch_tokens:
+                    if self.require_pincode:
+                        raise UserPincodeError('Pincode is required')
+                    # okay, proceed
+                    return user.verify_token(token)
+                else:
+                    logger.debug('8-digits, but not a valid scratch-token')
+                    logger.debug('Will obediently assume 2-digit pincode')
+            except ValueError:
+                logger.debug('8-char token used, but is not an int')
+                logger.debug('Will obediently assume 2-letter pincode')
+        
+        if len(token) > 8:
+            # are last 8 chars digits?
+            try:
+                itoken = int(token[-8:])
+                # is it a valid scratch-token?
+                if itoken in user.secret.scratch_tokens:
+                    logger.debug('Looks like pincode+8-digit scratch code')
+
+                    pincode   = token[:-8]
+                    tokencode = token[-8:]
+
+                    user.verify_pincode(pincode)
+                    return user.verify_token(tokencode)
+
+            except ValueError:
+                pass
+
+        logger.debug('Will treat as pincode+6-digit token')
+
+        pincode   = token[:-6]
+        tokencode = token[-6:]
+
+        user.verify_pincode(pincode)
+
+        return user.verify_token(tokencode)
 

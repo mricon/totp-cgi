@@ -54,7 +54,7 @@ class GASecretBackendFile(GASecretBackend):
 
     def get_user_secret(self, user):
 
-        totp_file = os.path.join(self.secrets_dir, user) + '.totp'
+        totp_file = os.path.join(self.secrets_dir, 'totp', user) + '.totp'
         logger.debug('Examining user secret file: %s' % totp_file)
 
         if not os.access(totp_file, os.R_OK):
@@ -102,6 +102,68 @@ class GASecretBackendFile(GASecretBackend):
         fh.close()
 
         return gaus
+
+    def get_user_hashcode(self, user):
+        # The format is basically /etc/shadow, except we ignore anything
+        # past the first 2 entries. We return the hashed code that we'll need
+        # to compare.
+        pincode_file = os.path.join(self.secrets_dir, 'pincodes')
+        if not os.access(pincode_file, os.R_OK):
+            raise totpcgi.UserNotFound('pincodes file not found!')
+
+        # Check if we have a compiled version first
+        logger.debug('Checking if there is a pincodes.db')
+        pincode_db_file = os.path.join(self.secrets_dir, 'pincodes.db')
+
+        if os.access(pincode_db_file, os.R_OK):
+            logger.debug('Found pincodes.db. Comparing mtime with pincodes')
+            dbmtime = os.stat(pincode_db_file).st_mtime
+            ptmtime = os.stat(pincode_file).st_mtime
+
+            logger.debug('dbmtime=%s' % dbmtime)
+            logger.debug('ptmtime=%s' % ptmtime)
+
+            if dbmtime >= ptmtime:
+                logger.debug('.db mtime greater, will use the db')
+
+                import anydbm
+                db = anydbm.open(pincode_db_file, 'r')
+
+                if user in db.keys():
+                    logger.debug('Found %s in the .db. Returning' % user)
+                    hashcode = db[user]
+                    db.close()
+                    return hashcode
+
+                logger.debug('%s not in .db. Falling back to plaintext.')
+            else:
+                logger.debug('.db is stale! Falling back to plaintext.')
+
+        logger.debug('Reading pincode file: %s' % pincode_file)
+
+        fh = open(pincode_file, 'r')
+
+        hashcode = None
+        
+        while True:
+            line = fh.readline()
+            
+            if line == '':
+                break
+
+            if line.find(':') == -1:
+                continue
+
+            parts = line.split(':')
+            if parts[0] == user:
+                logger.debug('Found user %s' % user)
+                hashcode = parts[1]
+                break
+
+        if hashcode is None:
+            raise totpcgi.UserPincodeError('Pincode not found for user %s' % user)
+            
+        return hashcode
 
 class GAStateBackendFile(GAStateBackend):
     def __init__(self, state_dir):
