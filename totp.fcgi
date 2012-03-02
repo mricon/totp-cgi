@@ -4,6 +4,7 @@ from cgi import parse_qs
 import syslog
 
 import totpcgi
+import totpcgi.backends
 
 SECRETS_DIR  = '/etc/totpcgi/secrets'
 STATE_DIR    = '/var/lib/totpcgi'
@@ -41,8 +42,8 @@ def webapp(environ, start_response):
     if mode != 'PAM_SM_AUTH':
         return bad_request(start_response, "We only support PAM_SM_AUTH")
 
-    state_be  = totpcgi.GAStateBackendFile(STATE_DIR)
-    secret_be = totpcgi.GASecretBackendFile(SECRETS_DIR)
+    state_be  = totpcgi.backends.GAStateBackendFile(STATE_DIR)
+    secret_be = totpcgi.backends.GASecretBackendFile(SECRETS_DIR)
 
     ga = totpcgi.GoogleAuthenticator(secret_be, state_be)
 
@@ -51,7 +52,7 @@ def webapp(environ, start_response):
     except Exception, ex:
         syslog.syslog(syslog.LOG_NOTICE,
             'Failure: user=%s, mode=%s, host=%s, message=%s' % (user, mode, 
-                remote_host, str(ex))
+                remote_host, str(ex)))
         return bad_request(start_response, str(ex))
 
     syslog.syslog(syslog.LOG_NOTICE, 

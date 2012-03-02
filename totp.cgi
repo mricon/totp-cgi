@@ -9,6 +9,7 @@ import cgitb
 cgitb.enable()
 
 import totpcgi
+import totpcgi.backends
 
 SECRETS_DIR  = '/etc/totpcgi/secrets'
 STATE_DIR    = '/var/lib/totpcgi'
@@ -44,8 +45,8 @@ def cgimain():
     if mode != 'PAM_SM_AUTH':
         bad_request('We only support PAM_SM_AUTH')
 
-    state_be  = totpcgi.GAStateBackendFile(STATE_DIR)
-    secret_be = totpcgi.GASecretBackendFile(SECRETS_DIR)
+    state_be  = totpcgi.backends.GAStateBackendFile(STATE_DIR)
+    secret_be = totpcgi.backends.GASecretBackendFile(SECRETS_DIR)
 
     ga = totpcgi.GoogleAuthenticator(secret_be, state_be)
 

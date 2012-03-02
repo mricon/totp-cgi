@@ -8,6 +8,9 @@ import logging
 import totpcgi
 import totpcgi.backends
 
+import os
+import subprocess
+
 secrets_dir = 'test/secrets'
 state_dir   = 'test/state'
 
@@ -146,7 +149,6 @@ class GATest(unittest.TestCase):
         with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'been used once'):
             gau.verify_token(future_token)
         
-
     def testRateLimit(self):
         logger.debug('Running testRateLimit')
         
@@ -242,6 +244,20 @@ class GATest(unittest.TestCase):
         with self.assertRaisesRegexp(totpcgi.VerifyFailed, 
                 'Scratch-token already used once'):
             gau.verify_token('88709766')
+
+    def testTotpCGI(self):
+        # Very basic test -- it should return 'user does not exist'
+        # as we cannot currently set SECRETS_DIR on the fly
+        os.environ['REMOTE_ADDR'] = '127.0.0.1'
+        os.environ['QUERY_STRING'] = 'user=bupkis&token=%s&mode=PAM_SM_AUTH'
+
+        command = ['env', 'python', 'totp.cgi']
+
+        ret = subprocess.check_output(command)
+
+        self.assertRegexpMatches(ret, 'bupkis.totp does not exist')
+
+
 
 
 if __name__ == '__main__':
