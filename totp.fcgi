@@ -24,9 +24,19 @@ import syslog
 import totpcgi
 import totpcgi.backends
 
-SECRETS_DIR  = '/etc/totpcgi'
-STATE_DIR    = '/var/lib/totpcgi'
-PAM_URL_CODE = 'OK'
+# Things you can tweak
+SECRETS_DIR     = '/etc/totpcgi'
+PAM_URL_CODE    = 'OK'
+REQUIRE_PINCODE = False
+
+STATE_BACKEND   = 'File'
+STATE_DIR       = '/var/lib/totpcgi'
+
+# Or, if using SQL backend:
+#STATE_BACKEND  = 'Postgresql'
+#PG_CONNECT_STR = 'user= password= host= dbname='
+
+# Things you shouldn't need to tweak
 
 syslog.openlog('totp.fcgi', syslog.LOG_PID, syslog.LOG_AUTH)
 
@@ -60,7 +70,11 @@ def webapp(environ, start_response):
     if mode != 'PAM_SM_AUTH':
         return bad_request(start_response, "We only support PAM_SM_AUTH")
 
-    state_be  = totpcgi.backends.GAStateBackendFile(STATE_DIR)
+    if STATE_BACKEND == 'File':
+        state_be = totpcgi.backends.GAStateBackendFile(STATE_DIR)
+    elif STATE_BACKEND == 'Postgresql':
+        state_be = totpcgi.backends.GAStateBackendPostgresql(PG_CONNECT_STR)
+
     secret_be = totpcgi.backends.GASecretBackendFile(SECRETS_DIR)
 
     ga = totpcgi.GoogleAuthenticator(secret_be, state_be)
