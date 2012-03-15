@@ -343,6 +343,8 @@ Now create the database and tables using the provided file. First,
 though, edit totpcgi.psql and adjust the password to a non-default
 value.
 
+To create and populate the database, run::
+
     su -l postgres
     createdb totpcgi
     psql totpcgi < totpcgi.psql
@@ -360,7 +362,7 @@ Now, install python-psycopg2 on your totpcgi servers::
 
     yum install python-psycopg2
 
-Modify the index.cgi of index.fcgi and change STATE_BACKEND to use
+Modify the index.cgi or index.fcgi and change STATE_BACKEND to use
 Postgresql. You will need to provide a PG_CONNECT_STR, which will be
 something like::
 
@@ -369,4 +371,6 @@ something like::
 Restart the http server if you're using FastCGI. Make sure there are no
 iptables in place.
 
-TODO: SELinux policy needs adjusting to make this work.
+.. warning::
+
+    TODO: SELinux policy needs adjusting to make this work.
