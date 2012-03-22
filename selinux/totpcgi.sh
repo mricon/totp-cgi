@@ -44,6 +44,8 @@ make -f /usr/share/selinux/devel/Makefile || exit
 
 # Fixing the file context on /var/www/cgi-bin/totp.cgi
 /sbin/restorecon -F -R -v /var/www/cgi-bin/totp.cgi
+# Fixing the file context on /var/www/totpcgi
+/sbin/restorecon -F -R -v /var/www/totpcgi
 # Fixing the file context on /var/lib/totpcgi
 /sbin/restorecon -F -R -v /var/lib/totpcgi
 # Fixing the file context on /etc/totpcgi
