@@ -3,3 +3,6 @@
 *.pyo
 *.json
 test.log
+build/*
+dist/*
+MANIFEST
