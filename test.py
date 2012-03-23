@@ -26,6 +26,7 @@ import logging
 import totpcgi
 import totpcgi.backends
 
+import sys
 import os
 import subprocess
 
@@ -457,6 +458,9 @@ class GATest(unittest.TestCase):
 
 
 if __name__ == '__main__':
+    assert sys.version_info[0] >= 2 and sys.version_info[1] >= 7, \
+        'Test suite requires python >= 2.7'
+
     # To test postgresql backend, do:
     # export pg_connect_string='blah blah'
     if 'pg_connect_string' in os.environ.keys():
