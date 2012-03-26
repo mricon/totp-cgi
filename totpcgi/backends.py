@@ -101,6 +101,12 @@ class GASecretBackendFile(GASecretBackend):
                     continue
         fh.close()
 
+        # Make sure that we have a window_size defined
+        # The topt configuration many not have had one, if not we need
+        # to make sure we set it to the default of 3
+        if not hasattr(gaus, 'window_size'):
+                gaus.window_size = 3
+
         return gaus
 
     def get_user_hashcode(self, user):
