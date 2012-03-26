@@ -73,7 +73,7 @@ def getCurrentToken(secret):
     token = str(totp.now()).zfill(6)
     return token
 
-def setCustomPincode(pincode, algo='6', user='valid', makedb=True):
+def setCustomPincode(pincode, algo='6', user='valid', makedb=True, addjunk=True):
     pincode_file = os.path.join(secrets_dir, 'pincodes')
     if os.access(pincode_file, os.W_OK):
         os.unlink(pincode_file)
@@ -89,7 +89,14 @@ def setCustomPincode(pincode, algo='6', user='valid', makedb=True):
     logger.debug('generated hashcode=%s' % hashcode)
 
     fh = open(pincode_file, 'w')
-    fh.write('%s:%s:junk' % (user, hashcode))
+    line = '%s:%s' % (user, hashcode)
+
+    if addjunk:
+        line += ':junk'
+
+    logger.debug('Pincode line is: %s' % line)
+
+    fh.write('%s\n' % line)
     fh.close()
 
     if makedb:
@@ -364,6 +371,13 @@ class GATest(unittest.TestCase):
         # Touch it, so it's newer than pincodes 
         os.utime(pincode_db_file, None)
 
+        ret = ga.verify_user_token('valid', token)
+        self.assertEqual(ret, 'Valid token used')
+
+        cleanState()
+
+        logger.debug('Testing without junk at the end')
+        setCustomPincode(pincode, '6', user='valid', makedb=False, addjunk=False)
         ret = ga.verify_user_token('valid', token)
         self.assertEqual(ret, 'Valid token used')
 

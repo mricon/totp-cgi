@@ -160,6 +160,8 @@ class GASecretBackendFile(GASecretBackend):
             if line.find(':') == -1:
                 continue
 
+            line = line.strip()
+
             parts = line.split(':')
             if parts[0] == user:
                 logger.debug('Found user %s' % user)
