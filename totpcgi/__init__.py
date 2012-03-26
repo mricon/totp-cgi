@@ -92,7 +92,6 @@ class GAUser:
 
     def verify_pincode(self, pincode):
         hashcode = self.secret_backend.get_user_hashcode(self.user)
-	hashcode = hashcode.strip()
 
         try:
             (junk, algo, salt, junk) = hashcode.split('$', 3)
