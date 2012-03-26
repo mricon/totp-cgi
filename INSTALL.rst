@@ -62,7 +62,7 @@ Install Regular CGI
 ~~~~~~~~~~~~~~~~~~~
 Copy totp.cgi into /var/www/totpcgi/index.cgi and set the permissions::
 
-    mkdir -p -m 0550 /var/www/totpcgi
+    mkdir -p -m 0551 /var/www/totpcgi
     cp -a totp.cgi /var/www/totpcgi/index.cgi
     chown -R totpcgi:totpcgi /var/www/totpcgi
     chmod 0550 /var/www/totpcgi/index.cgi
@@ -111,7 +111,7 @@ Start by installing mod_fcgid and flup::
 
 Next, copy the .fcgi in place, following the same procedure as .cgi::
 
-    mkdir -p -m 0550 /var/www/totpcgi
+    mkdir -p -m 0551 /var/www/totpcgi
     cp -a totp.fcgi /var/www/totpcgi/index.fcgi
     chown -R totpcgi:totpcgi /var/www/totpcgi
     chmod 0550 /var/www/totpcgi/index.fcgi
@@ -251,7 +251,7 @@ follows::
     {
         settings:
         {
-            uri = "https://totp.mricon.com/";     # URI to fetch 
+            uri = "https://totp.example.com/";    # URI to fetch 
             returncode = "OK";                    # Expected return on success
             userfield = "user";                   # userfield name to send 
             passwdfield = "token";                # passwdfield name to send
