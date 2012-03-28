@@ -80,7 +80,7 @@ def cgimain():
 
     secret_be = totpcgi.backends.GASecretBackendFile(SECRETS_DIR)
 
-    ga = totpcgi.GoogleAuthenticator(secret_be, state_be)
+    ga = totpcgi.GoogleAuthenticator(secret_be, state_be, REQUIRE_PINCODE)
 
     try:
         status = ga.verify_user_token(user, token)

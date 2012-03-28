@@ -4,7 +4,7 @@
 
 Name:		python-%{libname}
 Version:	0.2.0
-Release:	2%{?dist}
+Release:	3%{?dist}
 Summary:	A centralized totp solution based on google-authenticator
 
 License:	GPLv2+
@@ -43,7 +43,7 @@ It is intended to be used with pam_url.
 %{__mkdir} -p -m 0750 ${RPM_BUILD_ROOT}%{_sysconfdir}/%{libname}/totp
 %{__mkdir} -p -m 0700 ${RPM_BUILD_ROOT}%{_localstatedir}/lib/%{libname}
 %{__mkdir} -p ${RPM_BUILD_ROOT}%{_localstatedir}/www/%{libname}
-%{__install} -m 0755 totp.cgi ${RPM_BUILD_ROOT}%{_localstatedir}/www/%{libname}/
+%{__install} -m 0550 totp.cgi ${RPM_BUILD_ROOT}%{_localstatedir}/www/%{libname}/
 %{__mkdir} -p ${RPM_BUILD_ROOT}%{_sysconfdir}/httpd/conf.d
 %{__install} -m 0644 contrib/vhost-totp-cgi.conf ${RPM_BUILD_ROOT}%{_sysconfdir}/httpd/conf.d/totp-cgi.conf
 
@@ -76,12 +76,16 @@ cd %{_docdir}/%{name}-%{version}/selinux
 %{python_sitelib}/*
 %attr(0750, root, %{libname}) %{_sysconfdir}/%{libname}
 %attr(-, %{libname}, %{libname}) %{_localstatedir}/lib/%{libname}
-%attr(0550, %{libname}, %{libname}) %{_localstatedir}/www/%{libname}
-%attr(0664, %{libname}, %{libname}) %{_localstatedir}/www/%{libname}/totp.cgi
+%attr(0551, %{libname}, %{libname}) %{_localstatedir}/www/%{libname}
+%attr(0550, %{libname}, %{libname}) %{_localstatedir}/www/%{libname}/totp.cgi
 %config %attr(0644, -, -) %{_sysconfdir}/httpd/conf.d/totp-cgi.conf
 
 
 %changelog
+* Mon Mar 26 2012 Andrew Grimberg <agrimberg@linuxfoundation.org> - 0.2.0-3
+- Fix path perms for /var/www/totpcgi so that apache can chdir
+- Reduce perms on /var/www/totpcgi/totp.cgi to bare minimum
+
 * Fri Mar 23 2012 Konstantin Ryabitsev <mricon@kernel.org> - 0.2.0-2
 - Update to better match Fedora's spec standards.
 
