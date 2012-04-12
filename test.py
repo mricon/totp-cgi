@@ -40,8 +40,9 @@ state_dir   = 'test/state'
 
 pg_connect_string = ''
 
-STATE_BACKEND  = 'File'
-SECRET_BACKEND = 'File'
+SECRET_BACKEND  = 'File'
+PINCODE_BACKEND = 'File'
+STATE_BACKEND   = 'File'
 
 logger = logging.getLogger('totpcgi')
 logger.setLevel(logging.DEBUG)
@@ -53,20 +54,27 @@ formatter = logging.Formatter("[%(levelname)s:%(funcName)s:"
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
-def getStateBackend():
+def getBackends():
+    import totpcgi
+    import totpcgi.backends
+    backends = totpcgi.backends.Backends()
+
+    import totpcgi.backends.file
     if STATE_BACKEND == 'File':
-        state_be = totpcgi.backends.GAStateBackendFile(state_dir)
+        backends.state_backend = totpcgi.backends.file.GAStateBackend(state_dir)
 
-    elif STATE_BACKEND == 'Postgresql':
-        state_be = totpcgi.backends.GAStateBackendPostgresql(pg_connect_string)
+    elif STATE_BACKEND == 'pgsql':
+        import totpcgi.backends.pgsql
+        backends.state_backend = totpcgi.backends.pgsql.GAStateBackend(pg_connect_string)
 
-    return state_be
-
-def getSecretBackend():
     if SECRET_BACKEND == 'File':
-        secret_be = totpcgi.backends.GASecretBackendFile(secrets_dir)
+        backends.secret_backend = totpcgi.backends.file.GASecretBackend(secrets_dir)
 
-    return secret_be
+    if PINCODE_BACKEND == 'File':
+        backends.pincode_backend = totpcgi.backends.file.GAPincodeBackend(secrets_dir)
+
+
+    return backends
 
 def getCurrentToken(secret):
     totp = pyotp.TOTP(secret)
@@ -111,19 +119,18 @@ def setCustomPincode(pincode, algo='6', user='valid', makedb=True, addjunk=True)
     
 def cleanState(user='valid'):
     logger.debug('Cleaning state for user %s' % user)
-    state_be = getStateBackend()
-    state_be._remove_user_state(user)
+    backends = getBackends()
+    backends.state_backend._remove_user_state(user)
 
 def setCustomState(state, user='valid'):
     logger.debug('Setting custom state for user %s' % user)
-    state_be = getStateBackend()
-    state_be.get_user_state(user)
-    state_be.update_user_state(user, state)
+    backends = getBackends()
+    backends.state_backend.get_user_state(user)
+    backends.state_backend.update_user_state(user, state)
 
 def getValidUser():
-    state_be = getStateBackend()
-    secret_be = getSecretBackend()
-    return totpcgi.GAUser('valid', secret_be, state_be)
+    backends = getBackends()
+    return totpcgi.GAUser('valid', backends)
 
 class GATest(unittest.TestCase):
     def setUp(self):
@@ -159,27 +166,27 @@ class GATest(unittest.TestCase):
     def testInvalidSecretParsing(self):
         logger.debug('Running testInvalidSecretParsing')
 
-        state_be = getStateBackend()
-        secret_be = getSecretBackend()
+        backends = getBackends()
 
         with self.assertRaises(totpcgi.UserSecretError):
-            totpcgi.GAUser('invalid', secret_be, state_be)
+            totpcgi.GAUser('invalid', backends)
 
     def testInvalidUsername(self):
         logger.debug('Running testInvalidUsername')
         
-        state_be = getStateBackend()
+        backends = getBackends()
+
         with self.assertRaisesRegexp(totpcgi.VerifyFailed, 
                 'invalid characters'):
-            gau = totpcgi.GAUser('../../etc/passwd', secrets_dir, state_be)
+            gau = totpcgi.GAUser('../../etc/passwd', backends)
 
     def testNonExistentValidUser(self):
         logger.debug('Running testNonExistentValidUser')
+
+        backends = getBackends()
         
-        state_be = getStateBackend()
-        secret_be = getSecretBackend()
         with self.assertRaises(totpcgi.UserNotFound):
-            gau = totpcgi.GAUser('bob@example.com', secret_be, state_be)
+            gau = totpcgi.GAUser('bob@example.com', backends)
     
     def testValidToken(self):
         logger.debug('Running testValidToken')
@@ -329,7 +336,7 @@ class GATest(unittest.TestCase):
         os.environ['REMOTE_ADDR'] = '127.0.0.1'
         os.environ['QUERY_STRING'] = 'user=bupkis&token=555555&mode=PAM_SM_AUTH'
 
-        command = ['env', 'python', 'totp.cgi']
+        command = ['env', 'python', 'totp.cgi', 'totpcgi.conf']
 
         ret = subprocess.check_output(command)
 
@@ -340,10 +347,9 @@ class GATest(unittest.TestCase):
 
         logger.debug('Testing in non-required mode')
 
-        secret_be = getSecretBackend()
-        state_be  = getStateBackend()
+        backends = getBackends()
 
-        ga = totpcgi.GoogleAuthenticator(secret_be, state_be)
+        ga = totpcgi.GoogleAuthenticator(backends)
         gau = getValidUser()
 
         pincode   = 'wakkawakka'
@@ -428,8 +434,7 @@ class GATest(unittest.TestCase):
         cleanState()
 
         logger.debug('Turning on pincode enforcing')
-        ga = totpcgi.GoogleAuthenticator(secret_be, state_be, 
-            require_pincode=True)
+        ga = totpcgi.GoogleAuthenticator(backends, require_pincode=True)
 
         logger.debug('Trying valid token without pincode')
         with self.assertRaisesRegexp(totpcgi.UserPincodeError,
@@ -478,7 +483,7 @@ if __name__ == '__main__':
     # To test postgresql backend, do:
     # export pg_connect_string='blah blah'
     if 'pg_connect_string' in os.environ.keys():
-        STATE_BACKEND = 'Postgresql'
+        STATE_BACKEND = 'pgsql'
         pg_connect_string = os.environ['pg_connect_string']
 
     unittest.main()

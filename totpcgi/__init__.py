@@ -78,47 +78,22 @@ class GAUserSecret:
         return self.totp.at(timestamp)
 
 class GAUser:
-    def __init__(self, user, secret_backend, state_backend):
+    def __init__(self, user, backends):
 
         mo = SANE_USERNAME_RE.match(user)
         if not mo or mo.group(1) != user:
             raise VerifyFailed('Username contains invalid characters')
 
         self.user   = user
-        self.secret = secret_backend.get_user_secret(user)
+        self.secret = backends.secret_backend.get_user_secret(user)
         
-        self.state_backend  = state_backend
-        self.secret_backend = secret_backend
+        self.backends = backends
 
     def verify_pincode(self, pincode):
-        hashcode = self.secret_backend.get_user_hashcode(self.user)
-
-        try:
-            (junk, algo, salt, junk) = hashcode.split('$', 3)
-        except ValueError:
-            raise UserPincodeError('Unsupported hashcode format')
-
-        if algo not in ('1', '5', '6', '2a'):
-            raise UserPincodeError('Unsupported hashcode format: %s' % algo)
-
-        if algo == '2a':
-            logger.debug('$2a$ found, will use bcrypt')
-
-            import bcrypt
-            if bcrypt.hashpw(pincode, hashcode) != hashcode:
-                raise UserPincodeError('Pincode did not match.')
-        else:
-            logger.debug('$%s$ found, will use crypt' % algo)
-
-            import crypt
-            salt_str = '$%s$%s' % (algo, salt)
-            if crypt.crypt(pincode, salt_str) != hashcode:
-                raise UserPincodeError('Pincode did not match.')
-
-        return True
+        return self.backends.pincode_backend.verify_user_pincode(self.user, pincode)
 
     def verify_token(self, token):
-        state = self.state_backend.get_user_state(self.user)
+        state = self.backends.state_backend.get_user_state(self.user)
         
         new_state = GAUserState()
 
@@ -212,7 +187,7 @@ class GAUser:
             else:
                 new_state.fail_timestamps.append(used_timestamp)
 
-        self.state_backend.update_user_state(self.user, new_state)
+        self.backends.state_backend.update_user_state(self.user, new_state)
 
         logger.debug('success=%s' % str(success))
 
@@ -223,13 +198,12 @@ class GAUser:
 
 class GoogleAuthenticator:
 
-    def __init__(self, secret_backend, state_backend, require_pincode=False):
-        self.secret_backend  = secret_backend
-        self.state_backend   = state_backend
+    def __init__(self, backends, require_pincode=False):
+        self.backends = backends
         self.require_pincode = require_pincode
 
     def verify_user_token(self, user, token):
-        user = GAUser(user, self.secret_backend, self.state_backend)
+        user = GAUser(user, self.backends)
         # let's figure out if it's:
         #  1. regular 6-digit token
         #  2. 8-digit scratch-code

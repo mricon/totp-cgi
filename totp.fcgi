@@ -17,28 +17,33 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
 # 02111-1307, USA.
 #
-from flup.server import fcgi
-from cgi import parse_qs
+import sys
 import syslog
 
 import totpcgi
 import totpcgi.backends
 
-# Things you can tweak
-SECRETS_DIR     = '/etc/totpcgi'
-PAM_URL_CODE    = 'OK'
-REQUIRE_PINCODE = False
+import ConfigParser
 
-STATE_BACKEND   = 'File'
-STATE_DIR       = '/var/lib/totpcgi'
-
-# Or, if using SQL backend:
-#STATE_BACKEND  = 'Postgresql'
-#PG_CONNECT_STR = 'user= password= host= dbname='
-
-# Things you shouldn't need to tweak
+from flup.server import fcgi
+from cgi import parse_qs
 
 syslog.openlog('totp.fcgi', syslog.LOG_PID, syslog.LOG_AUTH)
+
+config = ConfigParser.RawConfigParser()
+config.read('/etc/totpcgi/totpcgi.conf')
+
+require_pincode = config.getboolean('main', 'require_pincode')
+success_string  = config.get('main', 'success_string')
+
+backends = totpcgi.backends.Backends()
+
+try:
+    backends.load_from_config(config)
+except totpcgi.backends.BackendNotSupported, ex:
+    syslog.syslog(syslog.LOG_CRIT, 
+            'Backend engine not supported: %s' % ex)
+    sys.exit(1)
 
 def bad_request(start_response, why):
     output = 'ERR\n' + why + '\n'
@@ -70,14 +75,7 @@ def webapp(environ, start_response):
     if mode != 'PAM_SM_AUTH':
         return bad_request(start_response, "We only support PAM_SM_AUTH")
 
-    if STATE_BACKEND == 'File':
-        state_be = totpcgi.backends.GAStateBackendFile(STATE_DIR)
-    elif STATE_BACKEND == 'Postgresql':
-        state_be = totpcgi.backends.GAStateBackendPostgresql(PG_CONNECT_STR)
-
-    secret_be = totpcgi.backends.GASecretBackendFile(SECRETS_DIR)
-
-    ga = totpcgi.GoogleAuthenticator(secret_be, state_be, REQUIRE_PINCODE)
+    ga = totpcgi.GoogleAuthenticator(backends, require_pincode)
 
     try:
         status = ga.verify_user_token(user, token)
@@ -91,7 +89,7 @@ def webapp(environ, start_response):
         'Success: user=%s, mode=%s, host=%s, message=%s' % (user, mode, 
             remote_host, status))
 
-    status = PAM_URL_CODE
+    status = success_string
 
     start_response('200 OK', [('Content-type', 'text/plain'),
                               ('Content-Length', str(len(status)))])

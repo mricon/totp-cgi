@@ -29,19 +29,28 @@ cgitb.enable()
 import totpcgi
 import totpcgi.backends
 
-# Things you can tweak
-SECRETS_DIR     = '/etc/totpcgi'
-PAM_URL_CODE    = 'OK'
-REQUIRE_PINCODE = False
+if len(sys.argv) > 1:
+    # blindly assume it's the config file
+    config_file = sys.argv[1]
+else:
+    config_file = '/etc/totpcgi/totpcgi.conf'
 
-STATE_BACKEND   = 'File'
-STATE_DIR       = '/var/lib/totpcgi'
+import ConfigParser
 
-# Or, if using SQL backend:
-#STATE_BACKEND  = 'Postgresql'
-#PG_CONNECT_STR = 'user= password= host= dbname='
+config = ConfigParser.RawConfigParser()
+config.read(config_file)
 
-# Things you shouldn't need to tweak
+require_pincode = config.getboolean('main', 'require_pincode')
+success_string  = config.get('main', 'success_string')
+
+backends = totpcgi.backends.Backends()
+
+try:
+    backends.load_from_config(config)
+except totpcgi.backends.BackendNotSupported, ex:
+    syslog.syslog(syslog.LOG_CRIT, 
+            'Backend engine not supported: %s' % ex)
+    sys.exit(1)
 
 syslog.openlog('totp.cgi', syslog.LOG_PID, syslog.LOG_AUTH)
 
@@ -73,14 +82,7 @@ def cgimain():
     if mode != 'PAM_SM_AUTH':
         bad_request('We only support PAM_SM_AUTH')
 
-    if STATE_BACKEND == 'File':
-        state_be = totpcgi.backends.GAStateBackendFile(STATE_DIR)
-    elif STATE_BACKEND == 'Postgresql':
-        state_be = totpcgi.backends.GAStateBackendPostgresql(PG_CONNECT_STR)
-
-    secret_be = totpcgi.backends.GASecretBackendFile(SECRETS_DIR)
-
-    ga = totpcgi.GoogleAuthenticator(secret_be, state_be, REQUIRE_PINCODE)
+    ga = totpcgi.GoogleAuthenticator(backends, require_pincode)
 
     try:
         status = ga.verify_user_token(user, token)
@@ -96,10 +98,10 @@ def cgimain():
 
     sys.stdout.write('Status: 200 OK\n')
     sys.stdout.write('Content-type: text/plain\n')
-    sys.stdout.write('Content-Length: %s\n' % len(PAM_URL_CODE))
+    sys.stdout.write('Content-Length: %s\n' % len(success_string))
     sys.stdout.write('\n')
 
-    sys.stdout.write(PAM_URL_CODE)
+    sys.stdout.write(success_string)
 
 
 if __name__ == '__main__':
