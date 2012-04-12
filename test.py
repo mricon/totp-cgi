@@ -35,8 +35,9 @@ import crypt
 
 import anydbm
 
-secrets_dir = 'test/secrets'
-state_dir   = 'test/state'
+secrets_dir  = 'test/secrets'
+pincode_file = 'test/secrets/pincodes'
+state_dir    = 'test/state'
 
 pg_connect_string = ''
 
@@ -71,7 +72,7 @@ def getBackends():
         backends.secret_backend = totpcgi.backends.file.GASecretBackend(secrets_dir)
 
     if PINCODE_BACKEND == 'File':
-        backends.pincode_backend = totpcgi.backends.file.GAPincodeBackend(secrets_dir)
+        backends.pincode_backend = totpcgi.backends.file.GAPincodeBackend(pincode_file)
 
 
     return backends
@@ -82,7 +83,6 @@ def getCurrentToken(secret):
     return token
 
 def setCustomPincode(pincode, algo='6', user='valid', makedb=True, addjunk=True):
-    pincode_file = os.path.join(secrets_dir, 'pincodes')
     if os.access(pincode_file, os.W_OK):
         os.unlink(pincode_file)
 
@@ -139,7 +139,6 @@ class GATest(unittest.TestCase):
 
     def tearDown(self):
         cleanState()
-        pincode_file = os.path.join(secrets_dir, 'pincodes')
         if os.access(pincode_file, os.W_OK):
             os.unlink(pincode_file)
         if os.access(pincode_file + '.db', os.W_OK):
@@ -373,7 +372,7 @@ class GATest(unittest.TestCase):
         logger.debug('Testing with fallback to pincodes')
         setCustomPincode('blarg', '6', user='donotwant', makedb=True)
         setCustomPincode(pincode, '6', user='valid', makedb=False)
-        pincode_db_file = os.path.join(secrets_dir, 'pincodes.db')
+        pincode_db_file = pincode_file + '.db'
         # Touch it, so it's newer than pincodes 
         os.utime(pincode_db_file, None)
 

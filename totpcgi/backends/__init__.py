@@ -48,13 +48,14 @@ class Backends:
 
         if pincode_backend_engine == 'file':
             import totpcgi.backends.file
-            secrets_dir = config.get('pincode_backend', 'secrets_dir')
-            self.pincode_backend = totpcgi.backends.file.GAPincodeBackend(secrets_dir)
+            pincode_file = config.get('pincode_backend', 'pincode_file')
+            self.pincode_backend = totpcgi.backends.file.GAPincodeBackend(pincode_file)
 
         elif pincode_backend_engine == 'ldap':
             import totpcgi.backends.ldap
-            server = config.get('pincode_backend', 'ldap_url')
-            self.pincode_backend = totpcgi.backends.ldap.GAPincodeBackend(ldap_url)
+            ldap_url = config.get('pincode_backend', 'ldap_url')
+            ldap_dn  = config.get('pincode_backend', 'ldap_dn')
+            self.pincode_backend = totpcgi.backends.ldap.GAPincodeBackend(ldap_url, ldap_dn)
 
         else:
             raise BackendNotSupported(

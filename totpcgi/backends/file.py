@@ -23,30 +23,29 @@ import os
 from fcntl import flock, LOCK_EX, LOCK_UN
 
 class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
-    def __init__(self, secrets_dir):
+    def __init__(self, pincode_file):
         totpcgi.backends.GAPincodeBackend.__init__(self)
         logger.debug('Using GAPincodeBackendFile')
 
-        self.secrets_dir = secrets_dir
+        self.pincode_file = pincode_file
 
     def verify_user_pincode(self, user, pincode):
         # The format is basically /etc/shadow, except we ignore anything
         # past the first 2 entries. We return the hashed code that we'll need
         # to compare.
-        pincode_file = os.path.join(self.secrets_dir, 'pincodes')
-        if not os.access(pincode_file, os.R_OK):
+        if not os.access(self.pincode_file, os.R_OK):
             raise totpcgi.UserNotFound('pincodes file not found!')
 
         # Check if we have a compiled version first
         logger.debug('Checking if there is a pincodes.db')
-        pincode_db_file = os.path.join(self.secrets_dir, 'pincodes.db')
+        pincode_db_file = self.pincode_file + '.db'
 
         hashcode = None
 
         if os.access(pincode_db_file, os.R_OK):
             logger.debug('Found pincodes.db. Comparing mtime with pincodes')
             dbmtime = os.stat(pincode_db_file).st_mtime
-            ptmtime = os.stat(pincode_file).st_mtime
+            ptmtime = os.stat(self.pincode_file).st_mtime
 
             logger.debug('dbmtime=%s' % dbmtime)
             logger.debug('ptmtime=%s' % ptmtime)
@@ -67,9 +66,9 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
                 logger.debug('.db is stale! Falling back to plaintext.')
 
         if hashcode is None:
-            logger.debug('Reading pincode file: %s' % pincode_file)
+            logger.debug('Reading pincode file: %s' % self.pincode_file)
 
-            fh = open(pincode_file, 'r')
+            fh = open(self.pincode_file, 'r')
 
             while True:
                 line = fh.readline()
@@ -88,6 +87,8 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
                     hashcode = parts[1]
                     break
 
+            fh.close()
+
         if hashcode is None:
             raise totpcgi.UserPincodeError('Pincode not found for user %s' % user)
 
@@ -103,7 +104,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
 
     def get_user_secret(self, user):
 
-        totp_file = os.path.join(self.secrets_dir, 'totp', user) + '.totp'
+        totp_file = os.path.join(self.secrets_dir, user) + '.totp'
         logger.debug('Examining user secret file: %s' % totp_file)
 
         if not os.access(totp_file, os.R_OK):
