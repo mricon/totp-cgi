@@ -4,7 +4,7 @@
 
 Name:		python-%{libname}
 Version:	0.2.0
-Release:	3%{?dist}
+Release:	4%{?dist}
 Summary:	A centralized totp solution based on google-authenticator
 
 License:	GPLv2+
@@ -72,6 +72,7 @@ cd %{_docdir}/%{name}-%{version}/selinux
 %files
 %doc README.rst COPYING INSTALL.rst
 %doc selinux contrib/*.conf contrib/*sql
+%doc contrib/pincode.py
 %doc totp.fcgi
 %{python_sitelib}/*
 %attr(0750, root, %{libname}) %{_sysconfdir}/%{libname}
@@ -82,6 +83,9 @@ cd %{_docdir}/%{name}-%{version}/selinux
 
 
 %changelog
+* Wed Apr 11 2012 Andrew Grimberg <agrimberg@linuxfoundation.org> - 0.2.0-4
+- Add in pincode.py script
+
 * Mon Mar 26 2012 Andrew Grimberg <agrimberg@linuxfoundation.org> - 0.2.0-3
 - Fix path perms for /var/www/totpcgi so that apache can chdir
 - Reduce perms on /var/www/totpcgi/totp.cgi to bare minimum
