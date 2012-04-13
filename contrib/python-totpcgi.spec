@@ -3,8 +3,8 @@
 %define libname totpcgi
 
 Name:		python-%{libname}
-Version:	0.2.0
-Release:	4%{?dist}
+Version:	0.3.0
+Release:	1%{?dist}
 Summary:	A centralized totp solution based on google-authenticator
 
 License:	GPLv2+
@@ -41,6 +41,7 @@ It is intended to be used with pam_url.
 %{__rm} -rf ${RPM_BUILD_ROOT}
 %{__python} setup.py install -O1 --skip-build --root ${RPM_BUILD_ROOT}
 %{__mkdir} -p -m 0750 ${RPM_BUILD_ROOT}%{_sysconfdir}/%{libname}/totp
+%{__install} -m 0440 %{libname}.conf ${RPM_BUILD_ROOT}%{_sysconfdir}/%{libname}/
 %{__mkdir} -p -m 0700 ${RPM_BUILD_ROOT}%{_localstatedir}/lib/%{libname}
 %{__mkdir} -p ${RPM_BUILD_ROOT}%{_localstatedir}/www/%{libname}
 %{__install} -m 0550 totp.cgi ${RPM_BUILD_ROOT}%{_localstatedir}/www/%{libname}/
@@ -61,12 +62,15 @@ cd %{_docdir}/%{name}-%{version}/selinux
 
 
 %preun
-# remove the selinux policy
-/usr/sbin/semodule -r totpcgi
-# Cleanup from our original install of the policy
-# I would use a ghost tag but it's annoying sometimes
-%{__rm} -rf %{_docdir}/%{name}-%{version}/selinux/tmp
-%{__rm} -f %{_docdir}/%{name}-%{version}/selinux/totpcgi.pp
+# only do this on a full removal
+if [ $1 = 0 ]; then
+	# remove the selinux policy
+	/usr/sbin/semodule -r totpcgi
+	# Cleanup from our original install of the policy
+	# I would use a ghost tag but it's annoying sometimes
+	%{__rm} -rf %{_docdir}/%{name}-%{version}/selinux/tmp
+	%{__rm} -f %{_docdir}/%{name}-%{version}/selinux/totpcgi.pp
+fi
 
 
 %files
@@ -79,10 +83,15 @@ cd %{_docdir}/%{name}-%{version}/selinux
 %attr(-, %{libname}, %{libname}) %{_localstatedir}/lib/%{libname}
 %attr(0551, %{libname}, %{libname}) %{_localstatedir}/www/%{libname}
 %attr(0550, %{libname}, %{libname}) %{_localstatedir}/www/%{libname}/totp.cgi
+%config %attr(0440, -, %{libname}) %{_sysconfdir}/%{libname}/%{libname}.conf
 %config %attr(0644, -, -) %{_sysconfdir}/httpd/conf.d/totp-cgi.conf
 
 
 %changelog
+* Thu Apr 12 2012 Andrew Grimberg <agrimberg@linuxfoundation.org> - 0.3.0-1
+- Bump version number
+- Split backend system
+
 * Wed Apr 11 2012 Andrew Grimberg <agrimberg@linuxfoundation.org> - 0.2.0-4
 - Add in pincode.py script
 

@@ -10,7 +10,7 @@ from distutils.core import setup
 def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
-VERSION='0.2.0'
+VERSION='0.3.0'
 NAME='totpcgi'
 
 setup(
@@ -20,7 +20,7 @@ setup(
     description='A centralized totp solution based on google-authenticator',
     author='Konstantin Ryabitsev',
     author_email='mricon@kernel.org',
-    packages=[NAME],
+    packages=[NAME, "%s.backends" % NAME],
     license='GPLv2+',
     long_description=read('README.rst'),
 )
