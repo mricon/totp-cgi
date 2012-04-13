@@ -4,6 +4,7 @@ include INSTALL.rst
 include totp.cgi
 include totp.fcgi
 include totpcgi.psql
+include totpcgi.conf
 include selinux/*
 include python-totpcgi.spec
 include test*

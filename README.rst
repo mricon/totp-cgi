@@ -5,10 +5,10 @@ A centralized totp solution based on google-authenticator
 ---------------------------------------------------------
 
 :Author:    mricon@kernel.org
-:Date:      2012-03-02
+:Date:      2012-04-13
 :Copyright: Konstantin Ryabitsev and contributors
 :License:   GPLv2+
-:Version:   0.2.0
+:Version:   0.3.0
 
 DECRIPTION
 ----------
@@ -49,6 +49,7 @@ REQUIREMENTS
 AUTHORS
 -------
   * Konstantin Ryabitsev <mricon@kernel.org>
+  * Andrew Grimberg <agrimberg@linuxfoundation.org>
 
 SUPPORT
 -------
