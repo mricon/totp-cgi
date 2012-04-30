@@ -29,3 +29,13 @@ logging_send_syslog_msg(httpd_totpcgi_script_t)
 
 # needed by totp.fcgi
 allow httpd_totpcgi_script_t httpd_t:unix_stream_socket { ioctl accept getattr shutdown read write };
+#
+# Allow binding to ldap
+sysnet_dns_name_resolve(httpd_totpcgi_script_t)
+miscfiles_read_certs(httpd_totpcgi_script_t)
+sysnet_use_ldap(httpd_totpcgi_script_t)
+
+# Allow connecting to postgresql
+postgresql_tcp_connect(httpd_totpcgi_script_t)
+postgresql_stream_connect(httpd_totpcgi_script_t)
+

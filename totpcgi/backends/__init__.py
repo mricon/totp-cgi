@@ -53,9 +53,11 @@ class Backends:
 
         elif pincode_backend_engine == 'ldap':
             import totpcgi.backends.ldap
-            ldap_url = config.get('pincode_backend', 'ldap_url')
-            ldap_dn  = config.get('pincode_backend', 'ldap_dn')
-            self.pincode_backend = totpcgi.backends.ldap.GAPincodeBackend(ldap_url, ldap_dn)
+            ldap_url    = config.get('pincode_backend', 'ldap_url')
+            ldap_dn     = config.get('pincode_backend', 'ldap_dn')
+            ldap_cacert = config.get('pincode_backend', 'ldap_cacert')
+
+            self.pincode_backend = totpcgi.backends.ldap.GAPincodeBackend(ldap_url, ldap_dn, ldap_cacert)
 
         else:
             raise BackendNotSupported(
@@ -71,7 +73,7 @@ class Backends:
 
         elif state_backend_engine == 'pgsql':
             import totpcgi.backends.pgsql
-            pg_connect_string = config.get('state_backend', 'pg_connect_ctring')
+            pg_connect_string = config.get('state_backend', 'pg_connect_string')
             self.state_backend = totpcgi.backends.pgsql.GAStateBackend(pg_connect_string)
 
         else:

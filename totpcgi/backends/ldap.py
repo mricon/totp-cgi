@@ -36,23 +36,28 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
     """ This verifies the pincode by trying to bind to ldap using the 
         username and pincode passed for verification"""
 
-    def __init__(self, ldap_url, ldap_dn):
+    def __init__(self, ldap_url, ldap_dn, ldap_cacert):
         totpcgi.backends.GAPincodeBackend.__init__(self)
-        self.ldap_url = ldap_url
-        self.ldap_dn = ldap_dn
+        self.ldap_url    = ldap_url
+        self.ldap_dn     = ldap_dn
+        self.ldap_cacert = ldap_cacert
 
     def verify_user_pincode(self, user, pincode):
+        if len(self.ldap_cacert):
+            ldap.set_option(ldap.OPT_X_TLS_CACERTFILE, self.ldap_cacert)
+
         lconn = ldap.initialize(self.ldap_url)
         lconn.protocol_version = 3
         lconn.set_option(ldap.OPT_REFERRALS, 0)
+
 
         tpt = Template(self.ldap_dn)
         dn = tpt.safe_substitute(username=user)
         
         try:
-            lconn.simple_bind(dn, pincode)
+            lconn.simple_bind_s(dn, pincode)
 
-        except ldap.LDAPError, ex:
+        except Exception, ex:
             raise totpcgi.UserPincodeError('LDAP bind failed: %s' % ex)
 
 class GAStateBackend:
