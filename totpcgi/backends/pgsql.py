@@ -35,7 +35,7 @@ def db_connect(connect_string):
 class GAStateBackend(totpcgi.backends.GAStateBackend):
     def __init__(self, connect_string):
         totpcgi.backends.GAStateBackend.__init__(self)
-        logger.debug('Using GAStateBackendPostgresql')
+        logger.debug('Using PGSQL State backend')
 
         logger.debug('Establishing connection to the database')
         self.conn = db_connect(connect_string)
@@ -136,7 +136,16 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
         logger.debug('Deleting state records for user=%s' % user)
 
         # should cascade correctly
-        cur.execute('DELETE FROM users WHERE username=%s', (user,))
+        cur.execute('''
+            DELETE FROM timestamps
+                  WHERE userid=(SELECT userid
+                                    FROM users
+                                   WHERE username=%s)''', (user,))
+        cur.execute('''
+            DELETE FROM used_scratch_tokens
+                  WHERE userid=(SELECT userid
+                                    FROM users
+                                   WHERE username=%s)''', (user,))
         self.conn.commit()
 
 class GASecretBackend(totpcgi.backends.GASecretBackend):
@@ -210,7 +219,7 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
         row = cur.fetchone()
 
         if not row:
-            raise totpcgi.UserPincodeError('no pincodes record for user %s' % user)
+            raise totpcgi.UserNotFound('no pincodes record for user %s' % user)
 
         (hashcode,) = row
 

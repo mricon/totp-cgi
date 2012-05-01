@@ -40,6 +40,9 @@ pincode_file = 'test/secrets/pincodes'
 state_dir    = 'test/state'
 
 pg_connect_string = ''
+ldap_dn = ''
+ldap_url = ''
+ldap_cacert = ''
 
 SECRET_BACKEND  = 'File'
 PINCODE_BACKEND = 'File'
@@ -54,6 +57,11 @@ formatter = logging.Formatter("[%(levelname)s:%(funcName)s:"
                               "%(lineno)s] %(message)s")
 ch.setFormatter(formatter)
 logger.addHandler(ch)
+
+def db_connect():
+    import psycopg2
+    conn = psycopg2.connect(pg_connect_string)
+    return conn
 
 def getBackends():
     import totpcgi
@@ -70,10 +78,16 @@ def getBackends():
 
     if SECRET_BACKEND == 'File':
         backends.secret_backend = totpcgi.backends.file.GASecretBackend(secrets_dir)
+    elif SECRET_BACKEND == 'pgsql':
+        backends.secret_backend = totpcgi.backends.pgsql.GASecretBackend(pg_connect_string)
 
     if PINCODE_BACKEND == 'File':
         backends.pincode_backend = totpcgi.backends.file.GAPincodeBackend(pincode_file)
-
+    elif PINCODE_BACKEND == 'pgsql':
+        backends.pincode_backend = totpcgi.backends.pgsql.GAPincodeBackend(pg_connect_string)
+    elif PINCODE_BACKEND == 'ldap':
+        import totpcgi.backends.ldap
+        backends.pincode_backend = totpcgi.backends.ldap.GAPincodeBackend(ldap_url, ldap_dn, ldap_cacert)
 
     return backends
 
@@ -83,9 +97,6 @@ def getCurrentToken(secret):
     return token
 
 def setCustomPincode(pincode, algo='6', user='valid', makedb=True, addjunk=True):
-    if os.access(pincode_file, os.W_OK):
-        os.unlink(pincode_file)
-
     if algo == '2a':
         hashcode = bcrypt.hashpw(pincode, bcrypt.gensalt())
     elif algo == 'junk':
@@ -96,26 +107,47 @@ def setCustomPincode(pincode, algo='6', user='valid', makedb=True, addjunk=True)
 
     logger.debug('generated hashcode=%s' % hashcode)
 
-    fh = open(pincode_file, 'w')
-    line = '%s:%s' % (user, hashcode)
+    if PINCODE_BACKEND == 'File':
+        if os.access(pincode_file, os.W_OK):
+            os.unlink(pincode_file)
 
-    if addjunk:
-        line += ':junk'
+        fh = open(pincode_file, 'w')
+        line = '%s:%s' % (user, hashcode)
 
-    logger.debug('Pincode line is: %s' % line)
+        if addjunk:
+            line += ':junk'
 
-    fh.write('%s\n' % line)
-    fh.close()
+        logger.debug('Pincode line is: %s' % line)
 
-    if makedb:
-        import anydbm
-        pincode_db_file = pincode_file + '.db'
-        if os.access(pincode_db_file, os.W_OK):
-            os.unlink(pincode_db_file)
+        fh.write('%s\n' % line)
+        fh.close()
 
-        db = anydbm.open(pincode_db_file, 'c')
-        db[user] = hashcode
-        db.close()
+        if makedb:
+            import anydbm
+            pincode_db_file = pincode_file + '.db'
+            if os.access(pincode_db_file, os.W_OK):
+                os.unlink(pincode_db_file)
+
+            db = anydbm.open(pincode_db_file, 'c')
+            db[user] = hashcode
+            db.close()
+
+    elif PINCODE_BACKEND == 'pgsql':
+        conn = db_connect()
+        cur = conn.cursor()
+
+        cur.execute('''
+            DELETE FROM pincodes 
+                  WHERE userid=(SELECT userid
+                                  FROM users
+                                 WHERE username=%s)''', (user,))
+        cur.execute('''
+            INSERT INTO pincodes
+                        (userid, pincode)
+                 VALUES ((SELECT userid
+                            FROM users
+                           WHERE username=%s), %s)''', (user, hashcode,))
+        conn.commit()
     
 def cleanState(user='valid'):
     logger.debug('Cleaning state for user %s' % user)
@@ -136,6 +168,45 @@ class GATest(unittest.TestCase):
     def setUp(self):
         # Remove any existing state files for user "valid"
         cleanState()
+        if SECRET_BACKEND == 'pgsql':
+            conn = db_connect()
+            cur = conn.cursor()
+
+            # Insert valid and invalid users into the db
+            queries = [
+                'DELETE FROM users WHERE username=%s',
+                'INSERT INTO users (username) VALUES (%s)'
+                ]
+
+            for query in queries:
+                for user in ('valid', 'invalid'):
+                    cur.execute(query, (user,))
+
+            cur.execute('''
+                INSERT INTO secrets 
+                            (userid, secret, rate_limit_times,
+                             rate_limit_seconds, window_size)
+                     VALUES ((SELECT userid 
+                                FROM users 
+                               WHERE username='valid'),
+                             'VN7J5UVLZEP7ZAGM', 4, 40, 18)''')
+            for token in (88709766, 11488461, 27893432, 60474774, 10449492):
+                cur.execute('''
+                    INSERT INTO scratch_tokens
+                                (userid, token)
+                         VALUES ((SELECT userid
+                                    FROM users
+                                   WHERE username='valid'),
+                                 %s)''', (token,))
+
+            cur.execute('''
+                INSERT INTO secrets 
+                            (userid, secret)
+                     VALUES ((SELECT userid
+                                FROM users
+                               WHERE username='invalid'),
+                             'WAKKAWAKKA')''')
+            conn.commit()
 
     def tearDown(self):
         cleanState()
@@ -356,79 +427,101 @@ class GATest(unittest.TestCase):
 
         token = pincode + tokencode
 
-        logger.debug('Testing without pincodes file')
-        with self.assertRaisesRegexp(totpcgi.UserNotFound, 
-                'pincodes file not found'):
-            ga.verify_user_token('valid', token)
+        if PINCODE_BACKEND == 'File':
+            logger.debug('Testing without pincodes file')
+            with self.assertRaisesRegexp(totpcgi.UserNotFound, 
+                    'pincodes file not found'):
+                ga.verify_user_token('valid', token)
 
-        logger.debug('Testing with pincodes.db older than pincodes')
-        setCustomPincode(pincode, '6', user='valid', makedb=True)
-        setCustomPincode('blarg', '6', user='valid', makedb=False)
+            logger.debug('Testing with pincodes.db older than pincodes')
+            setCustomPincode(pincode, '6', user='valid', makedb=True)
+            setCustomPincode('blarg', '6', user='valid', makedb=False)
 
-        with self.assertRaisesRegexp(totpcgi.UserPincodeError,
-            'Pincode did not match'):
-            ga.verify_user_token('valid', token)
+            with self.assertRaisesRegexp(totpcgi.UserPincodeError,
+                'Pincode did not match'):
+                ga.verify_user_token('valid', token)
 
-        logger.debug('Testing with fallback to pincodes')
-        setCustomPincode('blarg', '6', user='donotwant', makedb=True)
-        setCustomPincode(pincode, '6', user='valid', makedb=False)
-        pincode_db_file = pincode_file + '.db'
-        # Touch it, so it's newer than pincodes 
-        os.utime(pincode_db_file, None)
+            logger.debug('Testing with fallback to pincodes')
+            setCustomPincode('blarg', '6', user='donotwant', makedb=True)
+            setCustomPincode(pincode, '6', user='valid', makedb=False)
+            pincode_db_file = pincode_file + '.db'
+            # Touch it, so it's newer than pincodes 
+            os.utime(pincode_db_file, None)
 
-        ret = ga.verify_user_token('valid', token)
-        self.assertEqual(ret, 'Valid token used')
+            ret = ga.verify_user_token('valid', token)
+            self.assertEqual(ret, 'Valid token used')
 
-        cleanState()
+            cleanState()
 
-        logger.debug('Testing without junk at the end')
-        setCustomPincode(pincode, '6', user='valid', makedb=False, addjunk=False)
-        ret = ga.verify_user_token('valid', token)
-        self.assertEqual(ret, 'Valid token used')
+            logger.debug('Testing without junk at the end')
+            setCustomPincode(pincode, '6', user='valid', makedb=False, addjunk=False)
+            ret = ga.verify_user_token('valid', token)
+            self.assertEqual(ret, 'Valid token used')
 
-        cleanState()
+            cleanState()
 
-        logger.debug('Testing with 1-digit long pincode')
-        setCustomPincode('1')
-        ret = ga.verify_user_token('valid', '1'+tokencode)
-        self.assertEqual(ret, 'Valid token used')
+        elif PINCODE_BACKEND == 'pgsql':
+            logger.debug('Testing without a user pincode record present')
+            with self.assertRaisesRegexp(totpcgi.UserNotFound, 
+                    'no pincodes record'):
+                ga.verify_user_token('valid', token)
 
-        cleanState()
 
-        logger.debug('Testing with 2-digit long pincode')
-        setCustomPincode('99')
-        ret = ga.verify_user_token('valid', '99'+tokencode)
-        self.assertEqual(ret, 'Valid token used')
+        elif PINCODE_BACKEND in ('pgsql', 'File'):
+            logger.debug('Testing with 1-digit long pincode')
+            setCustomPincode('1')
+            ret = ga.verify_user_token('valid', '1'+tokencode)
+            self.assertEqual(ret, 'Valid token used')
 
-        cleanState()
+            cleanState()
 
-        logger.debug('Testing with bcrypt')
-        setCustomPincode(pincode, algo='2a')
-        ret = ga.verify_user_token('valid', token)
-        self.assertEqual(ret, 'Valid token used')
+            logger.debug('Testing with 2-digit long pincode')
+            setCustomPincode('99')
+            ret = ga.verify_user_token('valid', '99'+tokencode)
+            self.assertEqual(ret, 'Valid token used')
 
-        cleanState()
+            cleanState()
 
-        logger.debug('Testing with junk pincode')
-        setCustomPincode(pincode, algo='junk')
-        with self.assertRaisesRegexp(totpcgi.UserPincodeError,
-            'Unsupported hashcode format'):
-            ga.verify_user_token('valid', token)
+            logger.debug('Testing with bcrypt')
+            setCustomPincode(pincode, algo='2a')
+            ret = ga.verify_user_token('valid', token)
+            self.assertEqual(ret, 'Valid token used')
 
-        cleanState()
+            cleanState()
 
-        setCustomPincode(pincode)
+            logger.debug('Testing with junk pincode')
+            setCustomPincode(pincode, algo='junk')
+            with self.assertRaisesRegexp(totpcgi.UserPincodeError,
+                'Unsupported hashcode format'):
+                ga.verify_user_token('valid', token)
+
+            cleanState()
+
+            setCustomPincode(pincode)
+
+        if PINCODE_BACKEND == 'ldap':
+            valid_user = os.environ['ldap_user']
+            pincode    = os.environ['ldap_password']
+            token      = pincode + tokencode
+        else:
+            valid_user = 'valid'
+            pincode = 'wakkawakka'
+            setCustomPincode(pincode)
 
         logger.debug('Testing with pincode+scratch-code')
-        ret = ga.verify_user_token('valid', pincode+'11488461')
+        ret = ga.verify_user_token(valid_user, pincode+'11488461')
         self.assertEqual(ret, 'Scratch-token used')
 
         logger.debug('Testing with pincode+invalid-scratch-code')
         # Because it's an invalid 8-digit scratch code, it will
         # treat it as a 6-digit tokencode
-        with self.assertRaisesRegexp(totpcgi.UserPincodeError,
-            'Pincode did not match'):
-            ret = ga.verify_user_token('valid', pincode+'00000000')
+        if PINCODE_BACKEND == 'ldap':
+            raisedmsg = 'LDAP bind failed'
+        else:
+            raisedmsg = 'Pincode did not match'
+
+        with self.assertRaisesRegexp(totpcgi.UserPincodeError, raisedmsg):
+            ret = ga.verify_user_token(valid_user, pincode+'00000000')
 
         cleanState()
 
@@ -438,42 +531,40 @@ class GATest(unittest.TestCase):
         logger.debug('Trying valid token without pincode')
         with self.assertRaisesRegexp(totpcgi.UserPincodeError,
             'Pincode is required'):
-            ga.verify_user_token('valid', tokencode)
+            ga.verify_user_token(valid_user, tokencode)
 
         cleanState()
 
         logger.debug('Trying valid scratch token without pincode')
         with self.assertRaisesRegexp(totpcgi.UserPincodeError,
             'Pincode is required'):
-            ga.verify_user_token('valid', '11488461')
+            ga.verify_user_token(valid_user, '11488461')
 
         cleanState()
 
         logger.debug('Trying valid token with pincode in enforcing')
-        ret = ga.verify_user_token('valid', token)
+        ret = ga.verify_user_token(valid_user, token)
         self.assertEqual(ret, 'Valid token used')
         
         cleanState()
 
         logger.debug('Testing valid pincode+scratch-code in enforcing')
-        ret = ga.verify_user_token('valid', pincode+'11488461')
+        ret = ga.verify_user_token(valid_user, pincode+'11488461')
         self.assertEqual(ret, 'Scratch-token used')
 
         cleanState()
 
         logger.debug('Testing with valid token but invalid pincode')
-        with self.assertRaisesRegexp(totpcgi.UserPincodeError,
-            'Pincode did not match'):
-            ga.verify_user_token('valid', 'blarg'+tokencode)
+        with self.assertRaisesRegexp(totpcgi.UserPincodeError, raisedmsg):
+            ga.verify_user_token(valid_user, 'blarg'+tokencode)
 
         cleanState()
 
         logger.debug('Testing with valid pincode but invalid token')
         with self.assertRaisesRegexp(totpcgi.VerifyFailed,
             'Not a valid token'):
-            ga.verify_user_token('valid', pincode+'555555')
+            ga.verify_user_token(valid_user, pincode+'555555')
         
-
 
 if __name__ == '__main__':
     assert sys.version_info[0] >= 2 and sys.version_info[1] >= 7, \
@@ -482,8 +573,16 @@ if __name__ == '__main__':
     # To test postgresql backend, do:
     # export pg_connect_string='blah blah'
     if 'pg_connect_string' in os.environ.keys():
-        STATE_BACKEND = 'pgsql'
+        STATE_BACKEND = SECRET_BACKEND = PINCODE_BACKEND = 'pgsql'
         pg_connect_string = os.environ['pg_connect_string']
+    
+    # To test ldap backend, set env vars for
+    # ldap_url, ldap_dn, ldap_cacert, ldap_user and ldap_password
+    if 'ldap_url' in os.environ.keys():
+        PINCODE_BACKEND = 'ldap'
+        ldap_url    = os.environ['ldap_url']
+        ldap_dn     = os.environ['ldap_dn']
+        ldap_cacert = os.environ['ldap_cacert']
 
     unittest.main()
 

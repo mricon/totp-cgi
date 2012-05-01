@@ -27,7 +27,7 @@ from fcntl import flock, LOCK_EX, LOCK_UN
 class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
     def __init__(self, pincode_file):
         totpcgi.backends.GAPincodeBackend.__init__(self)
-        logger.debug('Using GAPincodeBackendFile')
+        logger.debug('Using FILE Pincode backend')
 
         self.pincode_file = pincode_file
 
@@ -100,7 +100,7 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
 class GASecretBackend(totpcgi.backends.GASecretBackend):
     def __init__(self, secrets_dir):
         totpcgi.backends.GASecretBackend.__init__(self)
-        logger.debug('Using GASecretBackendFile')
+        logger.debug('Using FILE Secret backend')
 
         self.secrets_dir = secrets_dir
 
@@ -168,7 +168,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
 class GAStateBackend(totpcgi.backends.GAStateBackend):
     def __init__(self, state_dir):
         totpcgi.backends.GAStateBackend.__init__(self)
-        logger.debug('Using GAStateBackendFile')
+        logger.debug('Using FILE State backend')
 
         self.state_dir = state_dir
         self.fhs = {}

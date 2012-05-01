@@ -38,6 +38,9 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
 
     def __init__(self, ldap_url, ldap_dn, ldap_cacert):
         totpcgi.backends.GAPincodeBackend.__init__(self)
+
+        logger.debug('Using LDAP Pincode backend')
+
         self.ldap_url    = ldap_url
         self.ldap_dn     = ldap_dn
         self.ldap_cacert = ldap_cacert
@@ -49,7 +52,6 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
         lconn = ldap.initialize(self.ldap_url)
         lconn.protocol_version = 3
         lconn.set_option(ldap.OPT_REFERRALS, 0)
-
 
         tpt = Template(self.ldap_dn)
         dn = tpt.safe_substitute(username=user)
