@@ -40,6 +40,11 @@ class Backends:
             secrets_dir = config.get('secret_backend', 'secrets_dir')
             self.secret_backend = totpcgi.backends.file.GASecretBackend(secrets_dir)
 
+        elif secret_backend_engine == 'pgsql':
+            import totpcgi.backends.pgsql
+            pg_connect_string = config.get('secret_backend', 'pg_connect_string')
+            self.secret_backend = totpcgi.backends.pgsql.GASecretBackend(pg_connect_string)
+
         else:
             raise BackendNotSupported(
                     'secret_backend engine not supported: %s' % secret_backend_engine)
@@ -51,6 +56,11 @@ class Backends:
             pincode_file = config.get('pincode_backend', 'pincode_file')
             self.pincode_backend = totpcgi.backends.file.GAPincodeBackend(pincode_file)
 
+        elif pincode_backend_engine == 'pgsql':
+            import totpcgi.backends.pgsql
+            pg_connect_string = config.get('pincode_backend', 'pg_connect_string')
+            self.pincode_backend = totpcgi.backends.pgsql.GAPincodeBackend(pg_connect_string)
+
         elif pincode_backend_engine == 'ldap':
             import totpcgi.backends.ldap
             ldap_url    = config.get('pincode_backend', 'ldap_url')
@@ -58,7 +68,6 @@ class Backends:
             ldap_cacert = config.get('pincode_backend', 'ldap_cacert')
 
             self.pincode_backend = totpcgi.backends.ldap.GAPincodeBackend(ldap_url, ldap_dn, ldap_cacert)
-
         else:
             raise BackendNotSupported(
                     'pincode_engine not supported: %s' % pincode_backend_engine)

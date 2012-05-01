@@ -19,18 +19,26 @@ import logging
 import totpcgi
 import totpcgi.backends
 
+import psycopg2
+
 logger = logging.getLogger('totpcgi')
+
+# Globally track the database connections
+dbconn = {}
+
+def db_connect(connect_string):
+    if connect_string not in dbconn:
+        dbconn[connect_string] = psycopg2.connect(connect_string)
+
+    return dbconn[connect_string]
 
 class GAStateBackend(totpcgi.backends.GAStateBackend):
     def __init__(self, connect_string):
         totpcgi.backends.GAStateBackend.__init__(self)
         logger.debug('Using GAStateBackendPostgresql')
 
-        import psycopg2
-        conn = psycopg2.connect(connect_string)
-
         logger.debug('Establishing connection to the database')
-        self.conn = conn
+        self.conn = db_connect(connect_string)
 
         self.locks = {}
 
@@ -132,17 +140,78 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
         self.conn.commit()
 
 class GASecretBackend(totpcgi.backends.GASecretBackend):
-    def __init__(self):
-        raise totpcgi.backends.BackendNotSupported(
-                'Secrets backend not supported by pgsql backend engine')
+    def __init__(self, connect_string):
+        totpcgi.backends.GASecretBackend.__init__(self)
+        logger.debug('Using PGSQL Secrets backend')
+
+        logger.debug('Establishing connection to the database')
+        self.conn = db_connect(connect_string)
 
     def get_user_secret(self, user):
-        pass
+        cur = self.conn.cursor()
 
-class GAPincodeBackend:
-    def __init__(self):
-        raise totpcgi.backends.BackendNotSupported(
-                'Pincode backend not supported by pgsql backend engine')
+        logger.debug('Querying DB for user %s' % user)
 
+        cur.execute('''
+            SELECT s.secret, 
+                   s.rate_limit_times, 
+                   s.rate_limit_seconds, 
+                   s.window_size
+              FROM secrets AS s 
+              JOIN users AS u USING (userid)
+             WHERE u.username = %s''', (user,))
+        row = cur.fetchone()
+
+        if not row:
+            raise totpcgi.UserNotFound('no secrets record for %s' % user)
+
+        (secret, rate_limit_times, rate_limit_seconds, window_size) = row
+        
+        gaus = totpcgi.GAUserSecret(secret)
+        if rate_limit_times is not None and rate_limit_seconds is not None:
+            gaus.rate_limit = (rate_limit_times, rate_limit_seconds)
+
+        if window_size is not None:
+            gaus.window_size = window_size
+
+        logger.debug('Querying DB for scratch tokens for %s' % user)
+
+        cur.execute('''
+            SELECT st.token
+              FROM scratch_tokens AS st
+              JOIN users AS u USING (userid)
+             WHERE u.username = %s''', (user,))
+        
+        for (token,) in cur.fetchall():
+            gaus.scratch_tokens.append(token)
+
+        return gaus
+
+
+class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
+    def __init__(self, connect_string):
+        totpcgi.backends.GAPincodeBackend.__init__(self)
+        logger.debug('Using PGSQL Pincodes backend')
+
+        logger.debug('Establishing connection to the database')
+        self.conn = db_connect(connect_string)
+        
     def verify_user_pincode(self, user, pincode):
-        pass
+        cur = self.conn.cursor()
+
+        logger.debug('Querying DB for user %s' % user)
+
+        cur.execute('''
+            SELECT p.pincode
+              FROM pincodes AS p
+              JOIN users AS u USING (userid)
+             WHERE u.username = %s''', (user,))
+
+        row = cur.fetchone()
+
+        if not row:
+            raise totpcgi.UserPincodeError('no pincodes record for user %s' % user)
+
+        (hashcode,) = row
+
+        return self._verify_by_hashcode(pincode, hashcode)

@@ -16,18 +16,25 @@
 -- 02111-1307, USA.
 --
 
-CREATE USER totpcgi WITH PASSWORD 'wakkawakka'; -- CHANGE THIS, OBVIOUSLY
+-- CHANGE THE PASSWORDS, OBVIOUSLY!
+CREATE USER totpcgi       WITH PASSWORD 'wakkawakka';
+CREATE USER totpcgi_admin WITH PASSWORD 'bokkabokka';
 
 CREATE SEQUENCE users_userid_seq;
 
 GRANT UPDATE ON users_userid_seq TO totpcgi;
+GRANT UPDATE ON users_userid_seq TO totpcgi_admin;
+
+-- Used by all backends
 
 CREATE TABLE users (
 	userid   INTEGER NOT NULL PRIMARY KEY DEFAULT nextval('users_userid_seq'),
 	username VARCHAR(255) NOT NULL
 );
+GRANT SELECT, INSERT         ON users TO totpcgi;
+GRANT SELECT, INSERT, DELETE ON users TO totpcgi_admin;
 
-GRANT SELECT, INSERT, DELETE ON users TO totpcgi;
+-- Used by the state backend
 
 CREATE TABLE timestamps (
 	userid    INTEGER NOT NULL REFERENCES users ON DELETE CASCADE,
@@ -35,10 +42,40 @@ CREATE TABLE timestamps (
 	timestamp INTEGER NOT NULL
 );
 GRANT SELECT, INSERT, DELETE ON timestamps TO totpcgi;
+GRANT SELECT, INSERT, DELETE ON timestamps TO totpcgi_admin;
 
 CREATE TABLE used_scratch_tokens (
-	userid INTEGER  NOT NULL REFERENCES users ON DELETE CASCADE,
+	userid INTEGER NOT NULL REFERENCES users ON DELETE CASCADE,
 	token  INTEGER NOT NULL
 );
 GRANT SELECT, INSERT, DELETE ON used_scratch_tokens TO totpcgi;
+GRANT SELECT, INSERT, DELETE ON used_scratch_tokens TO totpcgi_admin;
+
+-- Used by the secrets backend
+
+CREATE TABLE secrets (
+    userid             INTEGER     NOT NULL REFERENCES users ON DELETE CASCADE,
+    secret             VARCHAR(16) NOT NULL,
+    rate_limit_times   INTEGER DEFAULT 3,
+    rate_limit_seconds INTEGER DEFAULT 30,
+    window_size        INTEGER DEFAULT 0
+);
+GRANT SELECT                         ON secrets TO totpcgi;
+GRANT SELECT, INSERT, UPDATE, DELETE ON secrets TO totpcgi_admin;
+
+CREATE TABLE scratch_tokens (
+    userid INTEGER NOT NULL REFERENCES users ON DELETE CASCADE,
+    token  INTEGER
+);
+GRANT SELECT                 ON scratch_tokens TO totpcgi;
+GRANT SELECT, INSERT, DELETE ON scratch_tokens TO totpcgi_admin;
+
+-- Used by the pincodes backend
+
+CREATE TABLE pincodes (
+    userid INTEGER NOT NULL REFERENCES users ON DELETE CASCADE,
+    pincode VARCHAR(1024) NOT NULL
+);
+GRANT SELECT                         ON pincodes TO totpcgi;
+GRANT SELECT, INSERT, UPDATE, DELETE ON pincodes TO totpcgi_admin;
 
