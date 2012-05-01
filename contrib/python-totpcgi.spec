@@ -3,8 +3,8 @@
 %define libname totpcgi
 
 Name:		python-%{libname}
-Version:	0.3.0
-Release:	1%{?dist}
+Version:	0.3.1
+Release:	2%{?dist}
 Summary:	A centralized totp solution based on google-authenticator
 
 License:	GPLv2+
@@ -88,6 +88,11 @@ fi
 
 
 %changelog
+* Tue May 01 2012 Andrew Grimberg <agrimberg@linuxfoundation.org> - 0.3.1-2
+- Exceptions on bad passwords to LDAP
+- Config for CA cert to use for verification
+- PostgreSQL pincode & secrets backends
+
 * Thu Apr 12 2012 Andrew Grimberg <agrimberg@linuxfoundation.org> - 0.3.0-1
 - Bump version number
 - Split backend system
