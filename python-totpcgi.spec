@@ -38,7 +38,7 @@ This package includes SELinux policy for totpcgi.
 
 
 %prep
-%setup -q 
+%setup -q -n %{libname}-%{version}
 
 
 %build
@@ -71,7 +71,7 @@ cd -
 for selinuxvariant in %{selinux_variants}
 do
   install -d %{buildroot}%{_datadir}/selinux/${selinuxvariant}
-  install -p -m 644 SELinux/totpcgi.pp.${selinuxvariant} \
+  install -p -m 644 selinux/totpcgi.pp.${selinuxvariant} \
     %{buildroot}%{_datadir}/selinux/${selinuxvariant}/totpcgi.pp
 done
 /usr/sbin/hardlink -cv %{buildroot}%{_datadir}/selinux
@@ -110,12 +110,12 @@ fi
 %attr(-, %{libname}, %{libname}) %{_localstatedir}/lib/%{libname}
 %attr(0551, %{libname}, %{libname}) %{_localstatedir}/www/%{libname}
 %attr(0550, %{libname}, %{libname}) %{_localstatedir}/www/%{libname}/totp.cgi
-%config %attr(0440, -, %{libname}) %{_sysconfdir}/%{libname}/%{libname}.conf
-%config %attr(0644, -, -) %{_sysconfdir}/httpd/conf.d/totp-cgi.conf
+%config(noreplace) %attr(0440, -, %{libname}) %{_sysconfdir}/%{libname}/%{libname}.conf
+%config(noreplace) %attr(0644, -, -) %{_sysconfdir}/httpd/conf.d/totp-cgi.conf
 
 %files selinux
 %defattr(-,root,root,0755)
-%doc selinux/*
+%doc selinux/*.{fc,if,sh,te}
 %{_datadir}/selinux/*/totpcgi.pp
 
 
@@ -123,6 +123,7 @@ fi
 * Fri May 04 2012 Konstantin Ryabitsev <mricon@kernel.org> - 0.3.1-3
 - Package SELinux using Fedora's guidelines.
 - Add contrib dir in its entirety.
+- Use config(noreplace).
 
 * Tue May 01 2012 Andrew Grimberg <agrimberg@linuxfoundation.org> - 0.3.1-2
 - Exceptions on bad passwords to LDAP
