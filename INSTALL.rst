@@ -1,6 +1,5 @@
 INSTALLING
 ----------
-**THIS IS CONSIDERED BETA QUALITY. YOU HAVE BEEN WARNED.**
 
 .. note::
     
@@ -276,7 +275,6 @@ users can sudo with their Google-Authenticator token. Edit
 
     auth sufficient pam_url.so config=/etc/pam_url.conf
 
-*TODO: More complex configurations with token after password, etc.*
 
 Using pincodes
 ~~~~~~~~~~~~~~
@@ -302,7 +300,8 @@ hashes. To generate a bcrypt hash, install py-bcrypt and run::
 
 .. warning::
 
-    You should NOT use the same pin as the user system password.
+    You should NOT use the same pin as the user system password, at
+    least as long as you're using the file-based backend.
     
 Make sure you set the right permissions on the pincodes file::
 
@@ -314,8 +313,28 @@ set your pincode to 'secret' and your token is 555555, you enter
 'secret555555'. You should be able to use that the moment the pincodes
 file is in place.
 
-Now modify your index.cgi or index.fcgi. Locate the REQUIRE_PINCODE line
-and change it to "True". Restart the server if you're using FastCGI.
+You will now need to adjust /etc/totpcgi/totpcgi.conf to require that
+pincodes are used::
+
+    [main]
+    require_pincode = True
+
+The following PAM settings for sudo will require your users
+authenticate with their Pincode+Token::
+
+    #%PAM-1.0
+    auth       required     pam_env.so
+    auth       sufficient   pam_url.so config=/etc/pam_url.conf
+    auth       requisite    pam_succeed_if.so uid >= 500 quiet
+    auth       required     pam_deny.so
+
+    account	   include      system-auth
+    password   include      system-auth
+    session    optional     pam_keyinit.so revoke
+    session    required     pam_limits.so
+
+You can additionally adjust the sshd pam configuration to do the same --
+look in the contrib directory for it.
 
 PostgreSQL backend
 ~~~~~~~~~~~~~~~~~~
@@ -324,10 +343,9 @@ the state files in a central database.
 
 .. warning::
 
-    DO NOT use the File state backend (STATE_BACKEND='File') in a
-    multiple-server setup. This will make you vulnerable to token reuse,
-    as one server will not know that the token was already presented to
-    the other server.
+    DO NOT use the File state backend in a multiple-server setup. This
+    will make you vulnerable to token reuse, as one server will not know
+    that the token was already presented to the other server.
     
 Running databases is a complex task, but this is a quick guide. First,
 install postgresql-server::
@@ -336,7 +354,7 @@ install postgresql-server::
 
 Now init the database and start the server::
 
-    postgresql-setup initdb
+    service postgresql initdb
     service postgresql start
 
 Now create the database and tables using the provided file. First,
@@ -350,9 +368,9 @@ To create and populate the database, run::
     psql totpcgi < totpcgi.psql
 
 Now you need to edit /var/lib/pgsql/data/pg_hba.conf and add the
-following line::
+following line before all the "all" lines::
 
-    host   totpcgi   totpcgi   [cgi-server's-ip-range]   md5
+    host   totpcgi   totpcgi   your.subnet/24   md5
 
 Restart the server::
 
@@ -362,15 +380,42 @@ Now, install python-psycopg2 on your totpcgi servers::
 
     yum install python-psycopg2
 
-Modify the index.cgi or index.fcgi and change STATE_BACKEND to use
-Postgresql. You will need to provide a PG_CONNECT_STR, which will be
-something like::
+Now modify /etc/totpcgi/totpcgi.conf and enable the postgresql state
+backend::
 
-    PG_CONNECT_STR='user=totpcgi password=xxx host=dbhost dbname=totpcgi'
+    [state_backend]
+    engine = pgsql
+    pg_connect_string = user=totpcgi password=wakkawakka host=localhost dbname=totpcgi
+    
+Restart the http server if you're using FastCGI. Make sure your iptables
+rules on the server allow incoming postgresql traffic.
 
-Restart the http server if you're using FastCGI. Make sure there are no
-iptables in place.
+.. note::
 
-.. warning::
+    You can also use postgresql for your secrets and pincodes backend,
+    though documentation for that remains to be written. For now, you
+    can use the totpcgi.psql file to figure out the database schema --
+    where things go should be pretty obvious.
 
-    TODO: SELinux policy needs adjusting to make this work.
+LDAP backend
+~~~~~~~~~~~~
+You can use a LDAP directory for your pincode backend -- the CGI will
+validate pincodes by trying to bind to the LDAP server using the
+provided credentials. To enable the LDAP pincode backend, modify
+/etc/totpcgi/totpcgi.conf and set the following::
+
+    [pincode_backend]
+    engine = ldap
+    ldap_url = ldaps://ldap.example.com:636/
+    ldap_cacert = /etc/pki/tls/certs/ca.crt
+    ldap_dn = uid=$username,cn=users,cn=accounts,dc=example,dc=com
+
+The ldap_dn listed above is for use with FreeIPA -- you will need to
+modify it to reflect the valid DN for your users. The "$username" entry
+will be replaced by whatever the authenticating clients provide as their
+username (or, when using sudo, the username will be their current system
+usersname).
+
+Configuring LDAP is way beyond this document, so I leave this task up to
+you. If you've never done it before but would like to try, I suggest you
+look at FreeIPA (in RHEL6.2 and above as "ipa-server").
