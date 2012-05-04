@@ -334,7 +334,8 @@ authenticate with their Pincode+Token::
     session    required     pam_limits.so
 
 You can additionally adjust the sshd pam configuration to do the same --
-look in the contrib directory for it.
+look in the contrib directory for it. Keep in mind, that when public key
+authentication is used, it completely bypasses pam.
 
 PostgreSQL backend
 ~~~~~~~~~~~~~~~~~~
