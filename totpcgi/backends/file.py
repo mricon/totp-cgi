@@ -128,7 +128,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
 
             line = line.strip()
 
-            if line[0] == '"':
+            if len(line) and line[0] == '"':
                 if line[2:12] == 'RATE_LIMIT':
                     (tries, seconds) = line[13:].split(' ')
                     gaus.rate_limit = (int(tries), int(seconds))
