@@ -8,7 +8,7 @@
 
 Name:		python-%{libname}
 Version:	0.3.1
-Release:	2%{?dist}
+Release:	3%{?dist}
 Summary:	A centralized totp solution based on google-authenticator
 
 License:	GPLv2+
