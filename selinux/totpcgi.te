@@ -29,6 +29,8 @@ logging_send_syslog_msg(httpd_totpcgi_script_t)
 
 # needed by totp.fcgi
 allow httpd_totpcgi_script_t httpd_t:unix_stream_socket { ioctl accept getattr shutdown read write };
+# This should be upstream, really.
+allow httpd_suexec_t httpd_t:unix_stream_socket { read write };
 #
 # Allow binding to ldap
 sysnet_dns_name_resolve(httpd_totpcgi_script_t)
