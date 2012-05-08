@@ -7,8 +7,8 @@
 %define libname totpcgi
 
 Name:		python-%{libname}
-Version:	0.3.1
-Release:	3%{?dist}
+Version:	0.4.0
+Release:	1%{?dist}
 Summary:	A centralized totp solution based on google-authenticator
 
 License:	GPLv2+
@@ -120,6 +120,9 @@ fi
 
 
 %changelog
+* Tue May 08 2012 Konstantin Ryabitsev <mricon@kernel.org> - 0.4.0-1
+- Update to 0.4.0, which adds encrypted-secret functionality.
+
 * Fri May 04 2012 Konstantin Ryabitsev <mricon@kernel.org> - 0.3.1-3
 - Package SELinux using Fedora's guidelines.
 - Add contrib dir in its entirety.

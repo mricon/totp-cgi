@@ -5,10 +5,10 @@ A centralized totp solution based on google-authenticator
 ---------------------------------------------------------
 
 :Author:    mricon@kernel.org
-:Date:      2012-04-13
+:Date:      2012-05-08
 :Copyright: Konstantin Ryabitsev and contributors
 :License:   GPLv2+
-:Version:   0.3.0
+:Version:   0.4.0
 
 DECRIPTION
 ----------
@@ -30,6 +30,8 @@ FEATURES
 3. Supports pincodes (i.e. users log in with 'usercode555555')
 4. Supports file-based state backend for non-redundant installations and
    Postgresql for load-balanced setups.
+5. Supports encrypting the Google-Authenticator master secret with the
+   user's pincode.
 
 REQUIREMENTS
 ------------
