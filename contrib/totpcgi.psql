@@ -55,8 +55,8 @@ GRANT SELECT, INSERT, DELETE ON used_scratch_tokens TO totpcgi_admin;
 -- Used by the secrets backend
 
 CREATE TABLE secrets (
-    userid             INTEGER     NOT NULL REFERENCES users ON DELETE CASCADE,
-    secret             VARCHAR(16) NOT NULL,
+    userid             INTEGER      NOT NULL REFERENCES users ON DELETE CASCADE,
+    secret             VARCHAR(255) NOT NULL,
     rate_limit_times   INTEGER DEFAULT 3,
     rate_limit_seconds INTEGER DEFAULT 30,
     window_size        INTEGER DEFAULT 0,

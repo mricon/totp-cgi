@@ -108,8 +108,36 @@ class GASecretBackend:
     def __init__(self):
         pass
 
-    def get_user_secret(self, user):
+    def get_user_secret(self, user, pincode=None):
         pass
+
+    def _decrypt_secret(self, secret, pincode):
+        import base64
+        import hashlib
+        from Crypto.Cipher import AES
+
+        # we use AES block size 32. If longer than 32, we trim it.
+        # If shorter than 32, we repeat the pincode until we reach 32
+        if len(pincode) > 32:
+            pincode = pincode[:32]
+        elif len(pincode) < 32:
+            pincode = (pincode * (32/len(pincode)+1))[:32]
+
+        ciphertext = base64.decodestring(secret)
+
+        aescfb = AES.new(pincode, AES.MODE_CFB)
+
+        plaintext = aescfb.decrypt(ciphertext)
+
+        # The last 40 chars are sha1
+        (plaintext, ckhash) = (plaintext[:-40], plaintext[-40:])
+        myhash = hashlib.sha1(plaintext).hexdigest()
+        if myhash != ckhash:
+            logger.debug('Checksums did not match.')
+            raise totpcgi.UserSecretError('Could not decrypt the secret using the pincode provided')
+
+        logger.debug('Decryption successful')
+        return plaintext
 
 class GAPincodeBackend:
     def __init__(self):

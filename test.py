@@ -175,21 +175,21 @@ class GATest(unittest.TestCase):
             # Insert valid and invalid users into the db
             queries = [
                 'DELETE FROM users WHERE username=%s',
-                'INSERT INTO users (username) VALUES (%s)'
-                ]
-
-            for query in queries:
-                for user in ('valid', 'invalid'):
-                    cur.execute(query, (user,))
-
-            cur.execute('''
+                'INSERT INTO users (username) VALUES (%s)',
+                '''
                 INSERT INTO secrets 
                             (userid, secret, rate_limit_times,
                              rate_limit_seconds, window_size)
                      VALUES ((SELECT userid 
                                 FROM users 
-                               WHERE username='valid'),
-                             'VN7J5UVLZEP7ZAGM', 4, 40, 18)''')
+                               WHERE username=%s),
+                             'VN7J5UVLZEP7ZAGM', 4, 40, 18)'''
+                ]
+
+            for query in queries:
+                for user in ('valid', 'invalid', 'encrypted', 'encrypted-bad'):
+                    cur.execute(query, (user,))
+
             for token in (88709766, 11488461, 27893432, 60474774, 10449492):
                 cur.execute('''
                     INSERT INTO scratch_tokens
@@ -200,12 +200,20 @@ class GATest(unittest.TestCase):
                                  %s)''', (token,))
 
             cur.execute('''
-                INSERT INTO secrets 
-                            (userid, secret)
-                     VALUES ((SELECT userid
-                                FROM users
-                               WHERE username='invalid'),
-                             'WAKKAWAKKA')''')
+                UPDATE secrets SET secret = 'WAKKAWAKKA'
+                 WHERE userid = (SELECT userid
+                                   FROM users
+                                  WHERE username='invalid')''')
+            cur.execute('''
+                UPDATE secrets SET secret = 'rUquWtrAYQMJxjoz4GPa1IjOfd+4UQsgoP+gLS29Gx3eW4WbtQ2WrKrWFMVmel/TUcp8nOfAueI='
+                 WHERE userid = (SELECT userid
+                                   FROM users
+                                  WHERE username='encrypted')''')
+            cur.execute('''
+                UPDATE secrets SET secret = 'junkWtrAYQMJxjoz4GPa1IjOfd+4UQsgoP+gLS29Gx3eW4WbtQ2WrKrWFMVmel/TUcp8nOfAueI='
+                 WHERE userid = (SELECT userid
+                                   FROM users
+                                  WHERE username='encrypted-bad')''')
             conn.commit()
 
     def tearDown(self):
@@ -220,26 +228,31 @@ class GATest(unittest.TestCase):
 
         gau = getValidUser()
 
-        self.assertEqual(gau.secret.totp.secret, 'VN7J5UVLZEP7ZAGM',
+        backends = getBackends()
+        secret = backends.secret_backend.get_user_secret(gau.user)
+
+        self.assertEqual(secret.totp.secret, 'VN7J5UVLZEP7ZAGM',
                 'Secret read from valid.totp did not match')
         self.assertEqual(gau.user, 'valid', 
                 'User did not match')
-        self.assertEqual(gau.secret.rate_limit, (4, 40),
+        self.assertEqual(secret.rate_limit, (4, 40),
                 'RATE_LIMIT did not parse correctly')
-        self.assertEqual(gau.secret.window_size, 18,
+        self.assertEqual(secret.window_size, 18,
                 'WINDOW_SIZE did not parse correctly')
 
         scratch_tokens = [88709766,11488461,27893432,60474774,10449492]
 
-        self.assertItemsEqual(scratch_tokens, gau.secret.scratch_tokens)
+        self.assertItemsEqual(scratch_tokens, secret.scratch_tokens)
 
     def testInvalidSecretParsing(self):
         logger.debug('Running testInvalidSecretParsing')
 
         backends = getBackends()
 
+        gau = totpcgi.GAUser('invalid', backends)
         with self.assertRaises(totpcgi.UserSecretError):
-            totpcgi.GAUser('invalid', backends)
+            gau.verify_token(555555)
+
 
     def testInvalidUsername(self):
         logger.debug('Running testInvalidUsername')
@@ -255,14 +268,18 @@ class GATest(unittest.TestCase):
 
         backends = getBackends()
         
+        gau = totpcgi.GAUser('bob@example.com', backends)
         with self.assertRaises(totpcgi.UserNotFound):
-            gau = totpcgi.GAUser('bob@example.com', backends)
+            gau.verify_token(555555)
     
     def testValidToken(self):
         logger.debug('Running testValidToken')
 
         gau = getValidUser()
-        totp = pyotp.TOTP(gau.secret.totp.secret)
+        backends = getBackends()
+        secret = backends.secret_backend.get_user_secret(gau.user)
+
+        totp = pyotp.TOTP(secret.totp.secret)
         token = totp.now()
         self.assertEqual(gau.verify_token(token), 'Valid token used')
 
@@ -277,22 +294,17 @@ class GATest(unittest.TestCase):
     def testWindowSize(self):
         logger.debug('Running testWindowSize')
         gau = getValidUser()
-        totp = pyotp.TOTP(gau.secret.totp.secret)
-        # get a token from 60 seconds ago
+        backends = getBackends()
+        secret = backends.secret_backend.get_user_secret(gau.user)
+        totp = pyotp.TOTP(secret.totp.secret)
+
+        # get some tokens from +/- 60 seconds
         past_token = totp.at(int(time.time())-60)
         future_token = totp.at(int(time.time())+60)
         logger.debug('past_token=%s' % past_token)
         logger.debug('future_token=%s' % future_token)
 
-        # this should fail
-        gau.secret.window_size = 0
-        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'Not a valid token'):
-            gau.verify_token(past_token)
-        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'Not a valid token'):
-            gau.verify_token(future_token)
-
         # this should work
-        gau.secret.window_size = 10
         self.assertEqual(gau.verify_token(past_token), 
                 'Valid token within window size used')
         self.assertEqual(gau.verify_token(future_token), 
@@ -303,17 +315,26 @@ class GATest(unittest.TestCase):
             gau.verify_token(past_token)
         with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'been used once'):
             gau.verify_token(future_token)
-        
+
+        # get some tokens from +/- 600 seconds
+        past_token = totp.at(int(time.time())-600)
+        future_token = totp.at(int(time.time())+600)
+        logger.debug('past_token=%s' % past_token)
+        logger.debug('future_token=%s' % future_token)
+        # this should fail
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'Not a valid token'):
+            gau.verify_token(past_token)
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'Not a valid token'):
+            gau.verify_token(future_token)
+
     def testRateLimit(self):
         logger.debug('Running testRateLimit')
         
         gau = getValidUser()
 
-        # just in case the lightning strikes at that very number
-        if gau.secret.token == 555555:
-            token = '555556'
-        else:
-            token = '555555'
+        backends = getBackends()
+        secret = backends.secret_backend.get_user_secret(gau.user)
+        token  = '555555'
 
         # We now fail 4 times consecutively
         with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'Not a valid token'):
@@ -331,10 +352,10 @@ class GATest(unittest.TestCase):
 
         # Same with a valid token
         with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'Rate-limit'):
-            gau.verify_token(gau.secret.token)
+            gau.verify_token(secret.token)
 
         # Make sure we recover from rate-limiting correctly
-        old_timestamp = gau.secret.timestamp-(31+(gau.secret.rate_limit[1]*10))
+        old_timestamp = secret.timestamp-(31+(secret.rate_limit[1]*10))
         state = totpcgi.GAUserState()
         state.fail_timestamps = [
             old_timestamp,
@@ -349,17 +370,13 @@ class GATest(unittest.TestCase):
 
         # Valid token should work, too
         setCustomState(state)
-        self.assertEqual(gau.verify_token(gau.secret.token), 'Valid token used')
+        self.assertEqual(gau.verify_token(secret.token), 'Valid token used')
         
     def testInvalidToken(self):
         logger.debug('Running testInvalidToken')
 
         gau = getValidUser()
-        # just in case the lightning strikes at that very number
-        if gau.secret.token == 555555:
-            token = '555556'
-        else:
-            token = '555555'
+        token = '555555'
 
         logger.debug('Testing with an invalid 6-digit token')
         with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'Not a valid token'):
@@ -423,7 +440,8 @@ class GATest(unittest.TestCase):
         gau = getValidUser()
 
         pincode   = 'wakkawakka'
-        tokencode = str(gau.secret.token).zfill(6)
+        secret    = backends.secret_backend.get_user_secret(gau.user)
+        tokencode = str(secret.token).zfill(6)
 
         token = pincode + tokencode
 
@@ -513,14 +531,12 @@ class GATest(unittest.TestCase):
         self.assertEqual(ret, 'Scratch-token used')
 
         logger.debug('Testing with pincode+invalid-scratch-code')
-        # Because it's an invalid 8-digit scratch code, it will
-        # treat it as a 6-digit tokencode
         if PINCODE_BACKEND == 'ldap':
             raisedmsg = 'LDAP bind failed'
         else:
             raisedmsg = 'Pincode did not match'
 
-        with self.assertRaisesRegexp(totpcgi.UserPincodeError, raisedmsg):
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'Not a valid token'):
             ret = ga.verify_user_token(valid_user, pincode+'00000000')
 
         cleanState()
@@ -564,7 +580,35 @@ class GATest(unittest.TestCase):
         with self.assertRaisesRegexp(totpcgi.VerifyFailed,
             'Not a valid token'):
             ga.verify_user_token(valid_user, pincode+'555555')
-        
+
+    def testEncryptedSecret(self):
+        logger.debug('Running testEncryptedSecret')
+
+        backends = getBackends()
+        ga = totpcgi.GoogleAuthenticator(backends)
+
+        pincode = 'wakkawakka'
+        setCustomPincode(pincode, '6', user='encrypted')
+
+        totp = pyotp.TOTP('VN7J5UVLZEP7ZAGM')
+        token = str(totp.now()).zfill(6)
+
+        ga.verify_user_token('encrypted', pincode+token)
+
+        # This should fail, as we ignore scratch tokens with encrypted secrets
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed,
+                'Not a valid scratch-token'):
+            ga.verify_user_token('encrypted', pincode+'12345678')
+
+        cleanState(user='encrypted')
+
+        setCustomPincode(pincode, '6', user='encrypted-bad')
+        with self.assertRaisesRegexp(totpcgi.UserSecretError,
+                'Could not decrypt'):
+            ga.verify_user_token('encrypted-bad', pincode+token)
+
+        cleanState(user='encrypted-bad')
+
 
 if __name__ == '__main__':
     assert sys.version_info[0] >= 2 and sys.version_info[1] >= 7, \

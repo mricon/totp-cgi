@@ -84,16 +84,15 @@ class GAUser:
         if not mo or mo.group(1) != user:
             raise VerifyFailed('Username contains invalid characters')
 
-        self.user   = user
-        self.secret = backends.secret_backend.get_user_secret(user)
-        
+        self.user     = user
         self.backends = backends
 
     def verify_pincode(self, pincode):
         return self.backends.pincode_backend.verify_user_pincode(self.user, pincode)
 
-    def verify_token(self, token):
-        state = self.backends.state_backend.get_user_state(self.user)
+    def verify_token(self, token, pincode=None):
+        secret = self.backends.secret_backend.get_user_secret(self.user, pincode)
+        state  = self.backends.state_backend.get_user_state(self.user)
         
         new_state = GAUserState()
 
@@ -101,12 +100,12 @@ class GAUser:
 
         for timestamp in state.success_timestamps:
             # trim any timestamps that are older than (30s + WINDOW_SIZE)
-            cutoff = self.secret.timestamp-(30+(self.secret.window_size*10))
+            cutoff = secret.timestamp-(30+(secret.window_size*10))
 
             if timestamp < cutoff:
                 continue
 
-            at_token = self.secret.get_token_at(timestamp)
+            at_token = secret.get_token_at(timestamp)
 
             if at_token not in used_tokens:
                 used_tokens.append(at_token)
@@ -120,16 +119,16 @@ class GAUser:
         # are you being rate-limited right now?
         for timestamp in state.fail_timestamps:
             # trim any timestamps that are too old to consider
-            cutoff = self.secret.timestamp-(30+self.secret.rate_limit[1])
+            cutoff = secret.timestamp-(30+secret.rate_limit[1])
             if timestamp < cutoff:
                 continue
 
             new_state.fail_timestamps.append(timestamp)
 
-        used_timestamp = self.secret.timestamp
-        used_token     = self.secret.token
+        used_timestamp = secret.timestamp
+        used_token     = secret.token
             
-        if len(new_state.fail_timestamps) >= self.secret.rate_limit[0]:
+        if len(new_state.fail_timestamps) >= secret.rate_limit[0]:
             success = (False, 'Rate-limit reached, please try again later')
 
         else:
@@ -150,7 +149,7 @@ class GAUser:
                     # has it been used before?
                     if token in state.used_scratch_tokens:
                         success = (False, 'Scratch-token already used once')
-                    elif token not in self.secret.scratch_tokens:
+                    elif token not in secret.scratch_tokens:
                         success = (False, 'Not a valid scratch-token')
                     else:
                         success = (True, 'Scratch-token used')
@@ -162,18 +161,18 @@ class GAUser:
                     # has it been used before?
                     if token in used_tokens:
                         success = (False, 'Token has already been used once')
-                    elif token == self.secret.token:
+                    elif token == secret.token:
                         success = (True, 'Valid token used')
                     else:
                         # not a valid token right now
                         # This can stand being refactored, eh?
                         success = (False, 'Not a valid token')
-                        if self.secret.window_size > 0:
+                        if secret.window_size > 0:
                             # okay, let's try within the window_size
-                            start = self.secret.timestamp-(self.secret.window_size*10)
-                            end   = self.secret.timestamp+(self.secret.window_size*10)
+                            start = secret.timestamp-(secret.window_size*10)
+                            end   = secret.timestamp+(secret.window_size*10)
                             for timestamp in xrange(start, end, 10):
-                                at_token = self.secret.get_token_at(timestamp)
+                                at_token = secret.get_token_at(timestamp)
                                 if at_token == token:
                                     used_timestamp = timestamp
                                     used_token = token
@@ -221,42 +220,36 @@ class GoogleAuthenticator:
             # is it a valid integer?
             try:
                 itoken = int(token)
-                # is it among user's valid scratch tokens?
-                if itoken in user.secret.scratch_tokens:
+                # let's try to load it as an 8-digit token
+                try:
+                    logger.debug('Trying to verify as an 8-digit scratch-token')
+
+                    success = user.verify_token(token)
                     if self.require_pincode:
                         raise UserPincodeError('Pincode is required')
-                    # okay, proceed
-                    return user.verify_token(token)
-                else:
+                    return success
+
+                except VerifyFailed:
                     logger.debug('8-digits, but not a valid scratch-token')
-                    logger.debug('Will obediently assume 2-digit pincode')
+
             except ValueError:
                 logger.debug('8-char token used, but is not an int')
-                logger.debug('Will obediently assume 2-letter pincode')
         
-        if len(token) > 8:
-            # are last 8 chars digits?
-            try:
-                itoken = int(token[-8:])
-                # is it a valid scratch-token?
-                if itoken in user.secret.scratch_tokens:
-                    logger.debug('Looks like pincode+8-digit scratch code')
-
-                    pincode   = token[:-8]
-                    tokencode = token[-8:]
-
-                    user.verify_pincode(pincode)
-                    return user.verify_token(tokencode)
-
-            except ValueError:
-                pass
-
-        logger.debug('Will treat as pincode+6-digit token')
-
+        # Let's try to verify as a pincode + 6-digit 
         pincode   = token[:-6]
         tokencode = token[-6:]
 
-        user.verify_pincode(pincode)
+        try:
+            user.verify_pincode(pincode)
+            return user.verify_token(tokencode, pincode)
+        except UserPincodeError:
+            logger.debug('Did not succeed treating as pincode+6-digit')
 
-        return user.verify_token(tokencode)
+        logger.debug('Trying to verify as pincode + 8-digit scratch code')
+
+        pincode   = token[:-8]
+        tokencode = token[-8:]
+
+        user.verify_pincode(pincode)
+        return user.verify_token(tokencode, pincode)
 

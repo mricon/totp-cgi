@@ -156,7 +156,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
         logger.debug('Establishing connection to the database')
         self.conn = db_connect(connect_string)
 
-    def get_user_secret(self, user):
+    def get_user_secret(self, user, pincode=None):
         cur = self.conn.cursor()
 
         logger.debug('Querying DB for user %s' % user)
@@ -175,6 +175,12 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
             raise totpcgi.UserNotFound('no secrets record for %s' % user)
 
         (secret, rate_limit_times, rate_limit_seconds, window_size) = row
+
+        # encrypted is going to be longer than 16
+        using_encrypted_secret = False
+        if len(secret) > 16 and pincode is not None:
+            secret = self._decrypt_secret(secret, pincode)
+            using_encrypted_secret = True
         
         gaus = totpcgi.GAUserSecret(secret)
         if rate_limit_times is not None and rate_limit_seconds is not None:
@@ -182,6 +188,10 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
 
         if window_size is not None:
             gaus.window_size = window_size
+
+        # Not loading scratch tokens if using encrypted secret
+        if using_encrypted_secret:
+            return gaus
 
         logger.debug('Querying DB for scratch tokens for %s' % user)
 

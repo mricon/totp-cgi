@@ -104,7 +104,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
 
         self.secrets_dir = secrets_dir
 
-    def get_user_secret(self, user):
+    def get_user_secret(self, user, pincode=None):
 
         totp_file = os.path.join(self.secrets_dir, user) + '.totp'
         logger.debug('Examining user secret file: %s' % totp_file)
@@ -117,6 +117,12 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
         # secret is always the first entry
         secret = fh.readline()
         secret = secret.strip()
+
+        # encrypted is going to be longer than 16
+        using_encrypted_secret = False
+        if len(secret) > 16 and pincode is not None:
+            secret = self._decrypt_secret(secret, pincode)
+            using_encrypted_secret = True
 
         gaus = totpcgi.GAUserSecret(secret)
 
@@ -143,7 +149,8 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
                     logger.debug('window_size=%s' % window_size)
 
             # Scratch code tokens are 8-digit
-            elif len(line) == 8:
+            # We ignore scratch tokens if we're using encrypted secret
+            elif len(line) == 8 and not using_encrypted_secret:
                 try:
                     gaus.scratch_tokens.append(int(line))
                     logger.debug('Found a scratch-code token, adding it')
