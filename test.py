@@ -604,7 +604,7 @@ class GATest(unittest.TestCase):
 
         setCustomPincode(pincode, '6', user='encrypted-bad')
         with self.assertRaisesRegexp(totpcgi.UserSecretError,
-                'Could not decrypt'):
+                'Failed to verify hmac'):
             ga.verify_user_token('encrypted-bad', pincode+token)
 
         cleanState(user='encrypted-bad')

@@ -114,30 +114,50 @@ class GASecretBackend:
     def _decrypt_secret(self, secret, pincode):
         import base64
         import hashlib
+        import hmac
         from Crypto.Cipher import AES
+        from passlib.utils.pbkdf2 import pbkdf2
 
-        # we use AES block size 32. If longer than 32, we trim it.
-        # If shorter than 32, we repeat the pincode until we reach 32
-        if len(pincode) > 32:
-            pincode = pincode[:32]
-        elif len(pincode) < 32:
-            pincode = (pincode * (32/len(pincode)+1))[:32]
+        AES_BLOCK_SIZE = 16
+        KDF_ITER       = 2000
+        SALT_SIZE      = 16
+        KEY_SIZE       = 32
 
-        ciphertext = base64.decodestring(secret)
+        # split the secret into components
+        try:
+            (scheme, salt, ciphertext) = secret.split('$')
+            salt       = base64.b64decode(salt)
+            ciphertext = base64.b64decode(ciphertext)
+        except (ValueError, TypeError):
+            raise totpcgi.UserSecretError('Failed to parse encrypted secret')
 
-        aescfb = AES.new(pincode, AES.MODE_CFB)
+        aes_salt  = salt[:SALT_SIZE]
+        hmac_salt = salt[SALT_SIZE:]
 
-        plaintext = aescfb.decrypt(ciphertext)
+        sig_size = hashlib.sha256().digest_size
+        sig      = ciphertext[-sig_size:]
+        data     = ciphertext[:-sig_size]
 
-        # The last 40 chars are sha1
-        (plaintext, ckhash) = (plaintext[:-40], plaintext[-40:])
-        myhash = hashlib.sha1(plaintext).hexdigest()
-        if myhash != ckhash:
-            logger.debug('Checksums did not match.')
-            raise totpcgi.UserSecretError('Could not decrypt the secret using the pincode provided')
+        # verify hmac sig first
+        hmac_key = pbkdf2(pincode, hmac_salt, KDF_ITER, KEY_SIZE, 
+                          prf='hmac-sha256')
+
+        if hmac.new(hmac_key, data, hashlib.sha256).digest() != sig:
+            raise totpcgi.UserSecretError('Failed to verify hmac!')
+
+        aes_key = pbkdf2(pincode, aes_salt, KDF_ITER, KEY_SIZE, 
+                         prf='hmac-sha256')
+
+        iv_bytes = data[:AES_BLOCK_SIZE]
+        data     = data[AES_BLOCK_SIZE:]
+
+        cypher = AES.new(aes_key, AES.MODE_CBC, iv_bytes)
+        data   = cypher.decrypt(data)
+        secret = data[:-ord(data[-1])]
 
         logger.debug('Decryption successful')
-        return plaintext
+
+        return secret
 
 class GAPincodeBackend:
     def __init__(self):

@@ -4,27 +4,41 @@ import os
 import sys
 import base64
 import hashlib
+import hmac
 import getpass
+
 from Crypto.Cipher import AES
-from StringIO import StringIO
+from passlib.utils.pbkdf2 import pbkdf2
 
 from optparse import OptionParser
 
-def encrypt_secret(secret, pincode):
-    if len(pincode) > 32:
-        pincode = pincode[:32]
-    elif len(pincode) < 32:
-        pincode = (pincode * (32/len(pincode)+1))[:32]
+AES_BLOCK_SIZE = 16
+KDF_ITER       = 2000
+SALT_SIZE      = 16
+KEY_SIZE       = 32
 
-    aescfb = AES.new(pincode, AES.MODE_CFB)
+def encrypt_secret(data, pincode):
+    # generate 2 random salts to generate the aes key and hmac key
+    aes_salt = os.urandom(SALT_SIZE)
+    hmac_salt = os.urandom(SALT_SIZE)
 
-    myhash = hashlib.sha1(secret).hexdigest()
+    # derive the keys from pincode
+    aes_key = pbkdf2(pincode, aes_salt, KDF_ITER, KEY_SIZE, prf='hmac-sha256')
+    hmac_key = pbkdf2(pincode, hmac_salt, KDF_ITER, KEY_SIZE, prf='hmac-sha256')
 
-    plaintext  = secret + myhash
-    ciphertext = aescfb.encrypt(plaintext)
+    pad = AES_BLOCK_SIZE - len(data) % AES_BLOCK_SIZE
+    data = data + pad * chr(pad)
+    iv_bytes = os.urandom(AES_BLOCK_SIZE)
+    cypher = AES.new(aes_key, AES.MODE_CBC, iv_bytes)
+    data = iv_bytes + cypher.encrypt(data)
+    sig = hmac.new(hmac_key, data, hashlib.sha256).digest()
 
-    return base64.b64encode(ciphertext)
+    # jab it all together in a base64-encrypted format
+    outstr = ('aes256+hmac256$' 
+             + base64.b64encode(aes_salt+hmac_salt).replace('\n', '') + '$'
+             + base64.b64encode(data+sig).replace('\n', ''))
 
+    return outstr
 
 def encrypt_totp_file(path, pincode, output):
     fh = open(path, 'r')
@@ -37,8 +51,8 @@ def encrypt_totp_file(path, pincode, output):
     secret = lines[0]
 
     # Check to make sure it's not already encrypted
-    if len(secret) > 16:
-        print >> sys.stderr, 'Secret is not 16 chars. Is it already encrypted?'
+    if secret.find('aes256+hmac256') == 0:
+        print >> sys.stderr, '%s is already encrypted' % path
         sys.exit(1)
 
     lines[0] = encrypt_secret(secret, pincode)
