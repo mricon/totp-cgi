@@ -14,17 +14,18 @@ from optparse import OptionParser
 
 AES_BLOCK_SIZE = 16
 KDF_ITER       = 2000
-SALT_SIZE      = 16
+SALT_SIZE      = 32
 KEY_SIZE       = 32
 
 def encrypt_secret(data, pincode):
     # generate 2 random salts to generate the aes key and hmac key
-    aes_salt = os.urandom(SALT_SIZE)
-    hmac_salt = os.urandom(SALT_SIZE)
+    salt = os.urandom(SALT_SIZE)
 
-    # derive the keys from pincode
-    aes_key = pbkdf2(pincode, aes_salt, KDF_ITER, KEY_SIZE, prf='hmac-sha256')
-    hmac_key = pbkdf2(pincode, hmac_salt, KDF_ITER, KEY_SIZE, prf='hmac-sha256')
+    # derive the key from pincode
+    key = pbkdf2(pincode, salt, KDF_ITER, KEY_SIZE*2, prf='hmac-sha256')
+
+    aes_key  = key[:KEY_SIZE]
+    hmac_key = key[KEY_SIZE:]
 
     pad = AES_BLOCK_SIZE - len(data) % AES_BLOCK_SIZE
     data = data + pad * chr(pad)
@@ -35,7 +36,7 @@ def encrypt_secret(data, pincode):
 
     # jab it all together in a base64-encrypted format
     outstr = ('aes256+hmac256$' 
-             + base64.b64encode(aes_salt+hmac_salt).replace('\n', '') + '$'
+             + base64.b64encode(salt).replace('\n', '') + '$'
              + base64.b64encode(data+sig).replace('\n', ''))
 
     return outstr

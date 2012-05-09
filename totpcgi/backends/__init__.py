@@ -120,7 +120,6 @@ class GASecretBackend:
 
         AES_BLOCK_SIZE = 16
         KDF_ITER       = 2000
-        SALT_SIZE      = 16
         KEY_SIZE       = 32
 
         # split the secret into components
@@ -131,22 +130,18 @@ class GASecretBackend:
         except (ValueError, TypeError):
             raise totpcgi.UserSecretError('Failed to parse encrypted secret')
 
-        aes_salt  = salt[:SALT_SIZE]
-        hmac_salt = salt[SALT_SIZE:]
+        key = pbkdf2(pincode, salt, KDF_ITER, KEY_SIZE*2, prf='hmac-sha256')
+
+        aes_key  = key[:KEY_SIZE]
+        hmac_key = key[KEY_SIZE:]
 
         sig_size = hashlib.sha256().digest_size
         sig      = ciphertext[-sig_size:]
         data     = ciphertext[:-sig_size]
 
         # verify hmac sig first
-        hmac_key = pbkdf2(pincode, hmac_salt, KDF_ITER, KEY_SIZE, 
-                          prf='hmac-sha256')
-
         if hmac.new(hmac_key, data, hashlib.sha256).digest() != sig:
             raise totpcgi.UserSecretError('Failed to verify hmac!')
-
-        aes_key = pbkdf2(pincode, aes_salt, KDF_ITER, KEY_SIZE, 
-                         prf='hmac-sha256')
 
         iv_bytes = data[:AES_BLOCK_SIZE]
         data     = data[AES_BLOCK_SIZE:]
