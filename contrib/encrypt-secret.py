@@ -18,12 +18,12 @@ SALT_SIZE      = 32
 KEY_SIZE       = 32
 
 def encrypt_secret(data, pincode):
-    # generate 2 random salts to generate the aes key and hmac key
     salt = os.urandom(SALT_SIZE)
 
-    # derive the key from pincode
+    # derive a twice-long key from pincode
     key = pbkdf2(pincode, salt, KDF_ITER, KEY_SIZE*2, prf='hmac-sha256')
 
+    # split the key in two, one used for AES, another for HMAC
     aes_key  = key[:KEY_SIZE]
     hmac_key = key[KEY_SIZE:]
 
