@@ -21,6 +21,7 @@ BuildRequires: checkpolicy, selinux-policy-devel, hardlink
 BuildRequires: /usr/share/selinux/devel/policyhelp
 
 Requires:	py-bcrypt, python-pyotp, httpd, mod_ssl
+Requires:   python-crypto, python-passlib
 Requires:   selinux-policy >= %{selinux_policyver}
 
 %description
@@ -122,6 +123,7 @@ fi
 %changelog
 * Tue May 08 2012 Konstantin Ryabitsev <mricon@kernel.org> - 0.4.0-1
 - Update to 0.4.0, which adds encrypted-secret functionality.
+- Require python-crypto and python-passlib
 
 * Fri May 04 2012 Konstantin Ryabitsev <mricon@kernel.org> - 0.3.1-3
 - Package SELinux using Fedora's guidelines.
