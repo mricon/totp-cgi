@@ -18,6 +18,7 @@ from __future__ import absolute_import
 import logging
 import totpcgi
 import totpcgi.backends
+import totpcgi.utils
 
 logger = logging.getLogger('totpcgi')
 
@@ -118,10 +119,9 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
         secret = fh.readline()
         secret = secret.strip()
 
-        # encrypted is going to be longer than 16
         using_encrypted_secret = False
-        if len(secret) > 16 and pincode is not None:
-            secret = self._decrypt_secret(secret, pincode)
+        if secret.find('aes256+hmac256') == 0 and pincode is not None:
+            secret = totpcgi.utils.decrypt_secret(secret, pincode)
             using_encrypted_secret = True
 
         gaus = totpcgi.GAUserSecret(secret)
@@ -169,8 +169,45 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
         return gaus
 
     def get_user_hashcode(self, user):
-            
         return hashcode
+
+    def save_user_secret(self, user, gaus, pincode=None):
+        totp_file = os.path.join(self.secrets_dir, user) + '.totp'
+
+        try:
+            fh = open(totp_file, 'w')
+        except IOError as e:
+            raise totpcgi.SaveFailed('%s could not be saved: %s' % 
+                    (totp_file, e))
+
+        secret = gaus.totp.secret
+
+        if pincode is not None:
+            secret = totpcgi.utils.encrypt_secret(secret, pincode)
+
+        fh.write('%s\n' % secret)
+        fh.write('" RATE_LIMIT %s %s\n' % gaus.rate_limit)
+        fh.write('" WINDOW_SIZE %s\n' % gaus.window_size)
+        fh.write('" DISALLOW_REUSE\n')
+        fh.write('" TOTP_AUTH\n')
+
+        if pincode is None:
+            fh.write('\n'.join(gaus.scratch_tokens))
+
+        fh.close()
+
+        logger.debug('Wrote %s' % totp_file)
+
+
+    def delete_user_secret(self, gaus):
+        totp_file = os.path.join(self.secrets_dir, user) + '.totp'
+
+        try:
+            os.unlink(totp_file)
+        except (OSError, IOError) as e:
+            raise totpcgi.DeleteFailed('%s could not be deleted: %s' %
+                    (totp_file, e))
+
 
 class GAStateBackend(totpcgi.backends.GAStateBackend):
     def __init__(self, state_dir):

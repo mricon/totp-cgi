@@ -51,6 +51,17 @@ class VerifyFailed(exceptions.Exception):
         exceptions.Exception.__init__(self, message)
         logger.debug('!VerifyFailed: %s' % message)
 
+class SaveFailed(exceptions.Exception):
+    def __init__(self, message):
+        exceptions.Exception.__init__(self, message)
+        logger.debug('!SaveFailed: %s' % message)
+
+class DeleteFailed(exceptions.Exception):
+    def __init__(self, message):
+        exceptions.Exception.__init__(self, message)
+        logger.debug('!DeleteFailed: %s' % message)
+
+
 class GAUserState:
     def __init__(self):
         self.fail_timestamps     = []
@@ -76,6 +87,7 @@ class GAUserSecret:
 
     def get_token_at(self, timestamp):
         return self.totp.at(timestamp)
+
 
 class GAUser:
     def __init__(self, user, backends):

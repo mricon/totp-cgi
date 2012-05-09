@@ -2,44 +2,11 @@
 
 import os
 import sys
-import base64
-import hashlib
-import hmac
 import getpass
-
-from Crypto.Cipher import AES
-from passlib.utils.pbkdf2 import pbkdf2
 
 from optparse import OptionParser
 
-AES_BLOCK_SIZE = 16
-KDF_ITER       = 2000
-SALT_SIZE      = 32
-KEY_SIZE       = 32
-
-def encrypt_secret(data, pincode):
-    salt = os.urandom(SALT_SIZE)
-
-    # derive a twice-long key from pincode
-    key = pbkdf2(pincode, salt, KDF_ITER, KEY_SIZE*2, prf='hmac-sha256')
-
-    # split the key in two, one used for AES, another for HMAC
-    aes_key  = key[:KEY_SIZE]
-    hmac_key = key[KEY_SIZE:]
-
-    pad = AES_BLOCK_SIZE - len(data) % AES_BLOCK_SIZE
-    data = data + pad * chr(pad)
-    iv_bytes = os.urandom(AES_BLOCK_SIZE)
-    cypher = AES.new(aes_key, AES.MODE_CBC, iv_bytes)
-    data = iv_bytes + cypher.encrypt(data)
-    sig = hmac.new(hmac_key, data, hashlib.sha256).digest()
-
-    # jab it all together in a base64-encrypted format
-    outstr = ('aes256+hmac256$' 
-             + base64.b64encode(salt).replace('\n', '') + '$'
-             + base64.b64encode(data+sig).replace('\n', ''))
-
-    return outstr
+import totpcgi.utils
 
 def encrypt_totp_file(path, pincode, output):
     fh = open(path, 'r')
@@ -56,7 +23,7 @@ def encrypt_totp_file(path, pincode, output):
         print >> sys.stderr, '%s is already encrypted' % path
         sys.exit(1)
 
-    lines[0] = encrypt_secret(secret, pincode)
+    lines[0] = totpcgi.utils.encrypt_secret(secret, pincode)
 
     result = '\n'.join(lines)
 
@@ -67,7 +34,6 @@ def encrypt_totp_file(path, pincode, output):
         fh = open(output, 'w')
         fh.write(result)
         fh.close()
-
 
 if __name__ == '__main__':
     usage = '''usage: %prog totpfile

@@ -111,49 +111,16 @@ class GASecretBackend:
     def get_user_secret(self, user, pincode=None):
         pass
 
-    def _decrypt_secret(self, secret, pincode):
-        import base64
-        import hashlib
-        import hmac
-        from Crypto.Cipher import AES
-        from passlib.utils.pbkdf2 import pbkdf2
+    def save_user_secret(self, user, gaus, pincode=None):
+        pass 
 
-        AES_BLOCK_SIZE = 16
-        KDF_ITER       = 2000
-        KEY_SIZE       = 32
+    def delete_user_secret(self, user):
+        pass
 
-        # split the secret into components
-        try:
-            (scheme, salt, ciphertext) = secret.split('$')
-            salt       = base64.b64decode(salt)
-            ciphertext = base64.b64decode(ciphertext)
-        except (ValueError, TypeError):
-            raise totpcgi.UserSecretError('Failed to parse encrypted secret')
-
-        key = pbkdf2(pincode, salt, KDF_ITER, KEY_SIZE*2, prf='hmac-sha256')
-
-        aes_key  = key[:KEY_SIZE]
-        hmac_key = key[KEY_SIZE:]
-
-        sig_size = hashlib.sha256().digest_size
-        sig      = ciphertext[-sig_size:]
-        data     = ciphertext[:-sig_size]
-
-        # verify hmac sig first
-        if hmac.new(hmac_key, data, hashlib.sha256).digest() != sig:
-            raise totpcgi.UserSecretError('Failed to verify hmac!')
-
-        iv_bytes = data[:AES_BLOCK_SIZE]
-        data     = data[AES_BLOCK_SIZE:]
-
-        cypher = AES.new(aes_key, AES.MODE_CBC, iv_bytes)
-        data   = cypher.decrypt(data)
-        secret = data[:-ord(data[-1])]
-
-        logger.debug('Decryption successful')
-
-        return secret
-
+    def replace_user_secret(self, user, gaus, pincode=None):
+        self.delete_user_secret(user)
+        self.save_user_secret(user, gaus, pincode)
+        
 class GAPincodeBackend:
     def __init__(self):
         pass

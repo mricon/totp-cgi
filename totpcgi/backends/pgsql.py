@@ -18,6 +18,7 @@ from __future__ import absolute_import
 import logging
 import totpcgi
 import totpcgi.backends
+import totpcgi.utils
 
 import psycopg2
 
@@ -176,10 +177,9 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
 
         (secret, rate_limit_times, rate_limit_seconds, window_size) = row
 
-        # encrypted is going to be longer than 16
         using_encrypted_secret = False
-        if len(secret) > 16 and pincode is not None:
-            secret = self._decrypt_secret(secret, pincode)
+        if secret.find('aes256+hmac256') == 0 and pincode is not None:
+            secret = totpcgi.utils.decrypt_secret(secret, pincode)
             using_encrypted_secret = True
         
         gaus = totpcgi.GAUserSecret(secret)
@@ -205,6 +205,60 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
             gaus.scratch_tokens.append(token)
 
         return gaus
+
+    def _save_user_secret(self, user, gaus, pincode):
+        cur = self.conn.cursor()
+
+        secret = gaus.totp.secret
+
+        if pincode is not None:
+            secret = totpcgi.utils.encrypt_secret(secret, pincode)
+
+        cur.execute('''
+            INSERT INTO secrets 
+                        (userid, secret, rate_limit_times,
+                         rate_limit_seconds, window_size)
+                 VALUES ((SELECT userid 
+                            FROM users 
+                           WHERE username=%s),
+                         %s, %s, %s, %s)''', 
+                         (user, secret, gaus.rate_limit[0], gaus.rate_limit[1],
+                             window_size))
+
+        for token in gaus.scratch_tokens:
+            cur.execute('''
+                    INSERT INTO scratch_tokens
+                                (userid, token)
+                         VALUES ((SELECT userid
+                                    FROM users
+                                   WHERE username=%s),
+                                 %s)''', (user, token,))
+
+    def save_user_secret(self, user, gaus, pincode=None):
+        self._save_user_secret(user, gaus, pincode)
+        self.conn.commit()
+
+    def _delete_user_secret(self, user):
+        cur = self.conn.cursor()
+        cur.execute('''
+            DELETE FROM secrets
+                  WHERE userid=(SELECT userid
+                                  FROM users
+                                 WHERE username=%s)''', (user,))
+        cur.execute('''
+            DELETE FROM scratch_tokens
+                  WHERE userid=(SELECT userid
+                                  FROM users
+                                 WHERE username=%s)''', (user,))
+
+    def delete_user_secret(self, user):
+        self._delete_user_secret(user)
+        self.conn.commit()
+
+    def replace_user_secret(self, user, gaus, pincode=None):
+        self._delete_user_secret(user)
+        self._save_user_secret(user, gaus, pincode)
+        self.conn.commit()
 
 
 class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
