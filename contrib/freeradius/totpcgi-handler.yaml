@@ -1,0 +1,20 @@
+# LDAP Binding information
+binddn     : 'uid=searchuser,cn=users,cn=accounts,dc=example,dc=com'
+bindpwd    : 'searchUIDpwd'
+searchbase : 'cn=users,cn=accounts,dc=example,dc=com'
+searchscope: 'sub'
+
+# USERNAME is replaced with the uid that is passed in
+search     : '(&(uid=USERNAME)(objectClass=radiusprofile))'
+
+ldaphosts  :
+ - 'ldaps://ipa1.example.com'
+ - 'ldaps://ipa2.example.com'
+
+# URL for checking that the password+token is good
+totpurl    : 'https://totp.example.com/'
+
+# CA Info for validiation into topt-cgi's https instance
+ca_file    : '/etc/raddb/certs/puppet-ca.pem'
+key_file   : '/etc/raddb/certs/puppet-key.pem'
+cert_file  : '/etc/raddb/certs/puppet-crt.pem'

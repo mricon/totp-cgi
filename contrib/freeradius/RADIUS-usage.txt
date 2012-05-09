@@ -1,0 +1,35 @@
+totpcgi-handler.pl may be used by the embeded perl interpreter for
+FreeRADIUS. To use this make sure that toptcgi-handler.yaml is in
+/etc/raddb/ along with the perl script.
+
+Modules required for the script to run are:
+
+IO::Socket::SSL
+Net::SSLeay
+Net::LDAP
+Net::LDAP::Util
+LWP::UserAgent
+YAML::Syck
+
+Expectations of this script are that you have loaded in the FreeRADIUS
+LDAP schema extensions into your schema. Upon a successful validation of
+the user against totp-cgi the script will then poll LDAP for the user.
+The user object must have an objectClass of radiusprofile attached to it
+and at least dialupAccess set to TRUE (NOTE the check is case insensitive
+and the schema created it as a string instead of boolean).
+
+There is a limited number of attributes that are presently mapped back
+out of LDAP as we do not use the rlm_ldap attributes file. To extend the
+attributes add to the @attrs & %attrib_map definitions.
+
+The current mapping is as follows:
+
+LDAP Attribute		RADIUS AV
+==============		=========
+radiusGroupName		Class
+radiusFramedIPAddress	Framed-IP-Address
+radiusFramedIPNetmask	Framed-IP-Netmask
+radiusFilterId		Filter-Id
+radiusIdleTimeout	Idle-Timeout
+radiusServiceType	Service-Type
+radiusSessionTimeout	Session-Timeout
