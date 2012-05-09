@@ -40,13 +40,16 @@ REQUIREMENTS
 3. flup_ (for .fcgi only)
 4. psycopg2_ (for postgresql backend support)
 5. py-bcrypt_ (for pincode support using bcrypt)
-6. pam_url_ 
+6. pycrypto_ and passlib_ (for encrypted-secret support)
+7. pam_url_ 
 
 .. _pyotp: https://github.com/nathforge/pyotp
 .. _google-authenticator: https://code.google.com/p/google-authenticator/
 .. _flup: http://trac.saddi.com/flup
 .. _psycopg2: http://initd.org/psycopg/
 .. _py-bcrypt: https://code.google.com/p/py-bcrypt/
+.. _pycrypto: https://www.dlitz.net/software/pycrypto/
+.. _passlib: https://code.google.com/p/passlib/
 
 AUTHORS
 -------

@@ -337,6 +337,31 @@ You can additionally adjust the sshd pam configuration to do the same --
 look in the contrib directory for it. Keep in mind, that when public key
 authentication is used, it completely bypasses pam.
 
+Using encrypted secrets
+~~~~~~~~~~~~~~~~~~~~~~~
+Once you require the use of pincodes, you may consider using them to
+encrypt the master secrets used to generate TOTP codes. This gives you
+extra protection in case something happens and someone is able to read
+the contents of your TOTP secrets (for example, by getting access to
+your backups). Without knowing the users' pincodes, it would be
+impossible to decrypt the secrets.
+
+It's important to realize that this comes with a trade-off -- if a
+client forgets their pincode, the TOTP token will need to be
+re-provisioned.
+
+Encryption needs to be done during the provisioning stage. If the
+administrator provisions the tokens manually, they can use the
+"encrypt-secret.py" utility in the contrib directory. If some other
+process is used, you should rely on the implementation in that file to
+generate encrypted secrets that totpcgi can handle.
+
+.. warning::
+
+    One-time scratch tokens are completely ignored by totp-cgi when
+    encrypted secrets are used, as doing otherwise would defeat the
+    point of encrypting the master secret.
+
 PostgreSQL backend
 ~~~~~~~~~~~~~~~~~~
 If you want to use a load-balanced configuration, you will need to save
