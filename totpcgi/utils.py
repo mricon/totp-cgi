@@ -38,20 +38,40 @@ KDF_ITER       = 2000
 SALT_SIZE      = 32
 KEY_SIZE       = 32
 
-def generate_secret(rate_limit=None, window_size=None, scratch_tokens=5):
+def hash_pincode(pincode, algo='bcrypt'):
+    if algo not in ('bcrypt', 'sha256', 'sha512', 'md5'):
+        raise ValueError('Unsupported algorithm: %s' % algo)
+
+    import passlib.hash
+
+    # we stick to 5000 rounds for uniform compatibility
+    # if you want higher computational cost, just use bcrypt
+    if algo == 'sha256':
+        return passlib.hash.sha256_crypt.encrypt(pincode, rounds=5000)
+
+    if algo == 'sha512':
+        return passlib.hash.sha512_crypt.encrypt(pincode, rounds=5000)
+
+    if algo == 'md5':
+        # really? Okay.
+        return passlib.hash.md5_crypt.encrypt(pincode)
+
+    return passlib.hash.bcrypt.encrypt(pincode)
+
+
+def generate_secret(rate_limit=(3,30), window_size=17, scratch_tokens=5):
     secret = pyotp.random_base32(random=random)
 
     gaus = totpcgi.GAUserSecret(secret)
 
-    if rate_limit is None:
-        gaus.rate_limit = (3, 30)
-    if window_size is None:
-        gaus.window_size = 0
+    gaus.rate_limit  = rate_limit
+    gaus.window_size = window_size
 
     for i in xrange(scratch_tokens):
         gaus.scratch_tokens.append(str(random.randint(0, 99999999)).zfill(8))
 
     return gaus
+
 
 def encrypt_secret(data, pincode):
     salt = os.urandom(SALT_SIZE)

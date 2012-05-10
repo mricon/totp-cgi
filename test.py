@@ -35,8 +35,8 @@ import crypt
 
 import anydbm
 
-secrets_dir  = 'test/secrets'
-pincode_file = 'test/secrets/pincodes'
+secrets_dir  = 'test/'
+pincode_file = 'test/pincodes'
 state_dir    = 'test/state'
 
 pg_connect_string = ''
@@ -57,6 +57,9 @@ formatter = logging.Formatter("[%(levelname)s:%(funcName)s:"
                               "%(lineno)s] %(message)s")
 ch.setFormatter(formatter)
 logger.addHandler(ch)
+
+VALID_SECRET = None
+VALID_SCRATCH_TOKENS = []
 
 def db_connect():
     import psycopg2
@@ -96,58 +99,21 @@ def getCurrentToken(secret):
     token = str(totp.now()).zfill(6)
     return token
 
-def setCustomPincode(pincode, algo='6', user='valid', makedb=True, addjunk=True):
-    if algo == '2a':
-        hashcode = bcrypt.hashpw(pincode, bcrypt.gensalt())
-    elif algo == 'junk':
-        hashcode = '$junk$passthepepper$thisisclearlyjunk'
-    else:
-        salt_str = '$' + algo + '$' + 'notthebestsalteh'
-        hashcode = crypt.crypt(pincode, salt_str)
-
+def setCustomPincode(pincode, algo='sha256', user='valid', makedb=True, addjunk=False):
+    hashcode = totpcgi.utils.hash_pincode(pincode, algo=algo)
     logger.debug('generated hashcode=%s' % hashcode)
 
+    if not makedb and addjunk:
+        hashcode += ':junk'
+
+    backends = getBackends()
+
     if PINCODE_BACKEND == 'File':
-        if os.access(pincode_file, os.W_OK):
-            os.unlink(pincode_file)
-
-        fh = open(pincode_file, 'w')
-        line = '%s:%s' % (user, hashcode)
-
-        if addjunk:
-            line += ':junk'
-
-        logger.debug('Pincode line is: %s' % line)
-
-        fh.write('%s\n' % line)
-        fh.close()
-
-        if makedb:
-            import anydbm
-            pincode_db_file = pincode_file + '.db'
-            if os.access(pincode_db_file, os.W_OK):
-                os.unlink(pincode_db_file)
-
-            db = anydbm.open(pincode_db_file, 'c')
-            db[user] = hashcode
-            db.close()
+        backends.pincode_backend.save_user_hashcode(user, hashcode, makedb=makedb)
 
     elif PINCODE_BACKEND == 'pgsql':
-        conn = db_connect()
-        cur = conn.cursor()
+        backends.pincode_backend.save_user_hashcode(user, hashcode)
 
-        cur.execute('''
-            DELETE FROM pincodes 
-                  WHERE userid=(SELECT userid
-                                  FROM users
-                                 WHERE username=%s)''', (user,))
-        cur.execute('''
-            INSERT INTO pincodes
-                        (userid, pincode)
-                 VALUES ((SELECT userid
-                            FROM users
-                           WHERE username=%s), %s)''', (user, hashcode,))
-        conn.commit()
     
 def cleanState(user='valid'):
     logger.debug('Cleaning state for user %s' % user)
@@ -168,53 +134,6 @@ class GATest(unittest.TestCase):
     def setUp(self):
         # Remove any existing state files for user "valid"
         cleanState()
-        if SECRET_BACKEND == 'pgsql':
-            conn = db_connect()
-            cur = conn.cursor()
-
-            # Insert valid and invalid users into the db
-            queries = [
-                'DELETE FROM users WHERE username=%s',
-                'INSERT INTO users (username) VALUES (%s)',
-                '''
-                INSERT INTO secrets 
-                            (userid, secret, rate_limit_times,
-                             rate_limit_seconds, window_size)
-                     VALUES ((SELECT userid 
-                                FROM users 
-                               WHERE username=%s),
-                             'VN7J5UVLZEP7ZAGM', 4, 40, 18)'''
-                ]
-
-            for query in queries:
-                for user in ('valid', 'invalid', 'encrypted', 'encrypted-bad'):
-                    cur.execute(query, (user,))
-
-            for token in (88709766, 11488461, 27893432, 60474774, 10449492):
-                cur.execute('''
-                    INSERT INTO scratch_tokens
-                                (userid, token)
-                         VALUES ((SELECT userid
-                                    FROM users
-                                   WHERE username='valid'),
-                                 %s)''', (token,))
-
-            cur.execute('''
-                UPDATE secrets SET secret = 'WAKKAWAKKA'
-                 WHERE userid = (SELECT userid
-                                   FROM users
-                                  WHERE username='invalid')''')
-            cur.execute('''
-                UPDATE secrets SET secret = 'rUquWtrAYQMJxjoz4GPa1IjOfd+4UQsgoP+gLS29Gx3eW4WbtQ2WrKrWFMVmel/TUcp8nOfAueI='
-                 WHERE userid = (SELECT userid
-                                   FROM users
-                                  WHERE username='encrypted')''')
-            cur.execute('''
-                UPDATE secrets SET secret = 'junkWtrAYQMJxjoz4GPa1IjOfd+4UQsgoP+gLS29Gx3eW4WbtQ2WrKrWFMVmel/TUcp8nOfAueI='
-                 WHERE userid = (SELECT userid
-                                   FROM users
-                                  WHERE username='encrypted-bad')''')
-            conn.commit()
 
     def tearDown(self):
         cleanState()
@@ -231,18 +150,20 @@ class GATest(unittest.TestCase):
         backends = getBackends()
         secret = backends.secret_backend.get_user_secret(gau.user)
 
-        self.assertEqual(secret.totp.secret, 'VN7J5UVLZEP7ZAGM',
+        self.assertEqual(secret.totp.secret, VALID_SECRET,
                 'Secret read from valid.totp did not match')
         self.assertEqual(gau.user, 'valid', 
                 'User did not match')
-        self.assertEqual(secret.rate_limit, (4, 40),
+        self.assertEqual(secret.rate_limit, (4, 30),
                 'RATE_LIMIT did not parse correctly')
-        self.assertEqual(secret.window_size, 18,
+        self.assertEqual(secret.window_size, 17,
                 'WINDOW_SIZE did not parse correctly')
 
-        scratch_tokens = [88709766,11488461,27893432,60474774,10449492]
+        compare_tokens = []
+        for token in VALID_SCRATCH_TOKENS:
+            compare_tokens.append(int(token))
 
-        self.assertItemsEqual(scratch_tokens, secret.scratch_tokens)
+        self.assertItemsEqual(compare_tokens, secret.scratch_tokens)
 
     def testInvalidSecretParsing(self):
         logger.debug('Running testInvalidSecretParsing')
@@ -400,22 +321,22 @@ class GATest(unittest.TestCase):
     def testScratchTokens(self):
         gau = getValidUser()
 
-        ret = gau.verify_token('88709766')
+        ret = gau.verify_token(VALID_SCRATCH_TOKENS[0])
         self.assertEqual(ret, 'Scratch-token used')
 
         # try using it again
         with self.assertRaisesRegexp(totpcgi.VerifyFailed, 
                 'Scratch-token already used once'):
-            gau.verify_token('88709766')
+            gau.verify_token(VALID_SCRATCH_TOKENS[0])
 
         # try using another token
-        ret = gau.verify_token('11488461')
+        ret = gau.verify_token(VALID_SCRATCH_TOKENS[1])
         self.assertEqual(ret, 'Scratch-token used')
 
         # use first one again to make sure it's preserved in the state file
         with self.assertRaisesRegexp(totpcgi.VerifyFailed, 
                 'Scratch-token already used once'):
-            gau.verify_token('88709766')
+            gau.verify_token(VALID_SCRATCH_TOKENS[0])
 
     def testTotpCGI(self):
         # Very basic test -- it should return 'user does not exist'
@@ -452,17 +373,20 @@ class GATest(unittest.TestCase):
                 ga.verify_user_token('valid', token)
 
             logger.debug('Testing with pincodes.db older than pincodes')
-            setCustomPincode(pincode, '6', user='valid', makedb=True)
-            setCustomPincode('blarg', '6', user='valid', makedb=False)
+            setCustomPincode(pincode)
+            setCustomPincode('blarg', makedb=False)
 
             with self.assertRaisesRegexp(totpcgi.UserPincodeError,
                 'Pincode did not match'):
                 ga.verify_user_token('valid', token)
 
             logger.debug('Testing with fallback to pincodes')
-            setCustomPincode('blarg', '6', user='donotwant', makedb=True)
-            setCustomPincode(pincode, '6', user='valid', makedb=False)
             pincode_db_file = pincode_file + '.db'
+            os.unlink(pincode_db_file)
+            os.unlink(pincode_file)
+            setCustomPincode('blarg', user='donotwant')
+            os.unlink(pincode_file)
+            setCustomPincode(pincode, user='valid', makedb=False)
             # Touch it, so it's newer than pincodes 
             os.utime(pincode_db_file, None)
 
@@ -471,8 +395,8 @@ class GATest(unittest.TestCase):
 
             cleanState()
 
-            logger.debug('Testing without junk at the end')
-            setCustomPincode(pincode, '6', user='valid', makedb=False, addjunk=False)
+            logger.debug('Testing with junk at the end')
+            setCustomPincode(pincode, makedb=False, addjunk=True)
             ret = ga.verify_user_token('valid', token)
             self.assertEqual(ret, 'Valid token used')
 
@@ -501,7 +425,7 @@ class GATest(unittest.TestCase):
             cleanState()
 
             logger.debug('Testing with bcrypt')
-            setCustomPincode(pincode, algo='2a')
+            setCustomPincode(pincode, algo='bcrypt')
             ret = ga.verify_user_token('valid', token)
             self.assertEqual(ret, 'Valid token used')
 
@@ -527,7 +451,7 @@ class GATest(unittest.TestCase):
             setCustomPincode(pincode)
 
         logger.debug('Testing with pincode+scratch-code')
-        ret = ga.verify_user_token(valid_user, pincode+'11488461')
+        ret = ga.verify_user_token(valid_user, pincode+VALID_SCRATCH_TOKENS[0])
         self.assertEqual(ret, 'Scratch-token used')
 
         logger.debug('Testing with pincode+invalid-scratch-code')
@@ -554,7 +478,7 @@ class GATest(unittest.TestCase):
         logger.debug('Trying valid scratch token without pincode')
         with self.assertRaisesRegexp(totpcgi.UserPincodeError,
             'Pincode is required'):
-            ga.verify_user_token(valid_user, '11488461')
+            ga.verify_user_token(valid_user, VALID_SCRATCH_TOKENS[0])
 
         cleanState()
 
@@ -565,7 +489,7 @@ class GATest(unittest.TestCase):
         cleanState()
 
         logger.debug('Testing valid pincode+scratch-code in enforcing')
-        ret = ga.verify_user_token(valid_user, pincode+'11488461')
+        ret = ga.verify_user_token(valid_user, pincode+VALID_SCRATCH_TOKENS[0])
         self.assertEqual(ret, 'Scratch-token used')
 
         cleanState()
@@ -588,9 +512,9 @@ class GATest(unittest.TestCase):
         ga = totpcgi.GoogleAuthenticator(backends)
 
         pincode = 'wakkawakka'
-        setCustomPincode(pincode, '6', user='encrypted')
+        setCustomPincode(pincode, user='encrypted')
 
-        totp = pyotp.TOTP('VN7J5UVLZEP7ZAGM')
+        totp = pyotp.TOTP(VALID_SECRET)
         token = str(totp.now()).zfill(6)
 
         ga.verify_user_token('encrypted', pincode+token)
@@ -602,9 +526,9 @@ class GATest(unittest.TestCase):
 
         cleanState(user='encrypted')
 
-        setCustomPincode(pincode, '6', user='encrypted-bad')
+        setCustomPincode(pincode, user='encrypted-bad')
         with self.assertRaisesRegexp(totpcgi.UserSecretError,
-                'Failed to verify hmac'):
+                'Failed to'):
             ga.verify_user_token('encrypted-bad', pincode+token)
 
         cleanState(user='encrypted-bad')
@@ -628,5 +552,29 @@ if __name__ == '__main__':
         ldap_dn     = os.environ['ldap_dn']
         ldap_cacert = os.environ['ldap_cacert']
 
-    unittest.main()
+    backends = getBackends()
 
+    # valid user
+    gaus = totpcgi.utils.generate_secret(rate_limit=(4, 30))
+    backends.secret_backend.save_user_secret('valid', gaus)
+
+    VALID_SECRET = gaus.totp.secret
+    VALID_SCRATCH_TOKENS = gaus.scratch_tokens
+
+    # encrypted-secret user is same as valid, just encrypted
+    backends.secret_backend.save_user_secret('encrypted', gaus, 'wakkawakka')
+
+    # invalid user (bad secret)
+    gaus = totpcgi.utils.generate_secret()
+    gaus.totp.secret = 'WAKKAWAKKA'
+    backends.secret_backend.save_user_secret('invalid', gaus)
+
+    # encrypted-bad (bad encryption)
+    gaus.totp.secret = 'aes256+hmac256$WAKKAWAKKA$WAKKAWAKKA'
+    backends.secret_backend.save_user_secret('encrypted-bad', gaus)
+
+    try:
+        unittest.main()
+    finally:
+        for username in ('valid', 'invalid', 'encrypted', 'encrypted-bad'):
+            backends.secret_backend.delete_user_secret(username)

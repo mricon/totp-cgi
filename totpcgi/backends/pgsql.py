@@ -206,8 +206,10 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
 
         return gaus
 
-    def _save_user_secret(self, user, gaus, pincode):
+    def save_user_secret(self, user, gaus, pincode):
         cur = self.conn.cursor()
+
+        self._delete_user_secret(user)
 
         secret = gaus.totp.secret
 
@@ -234,8 +236,6 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
                                    WHERE username=%s),
                                  %s)''', (user, token,))
 
-    def save_user_secret(self, user, gaus, pincode=None):
-        self._save_user_secret(user, gaus, pincode)
         self.conn.commit()
 
     def _delete_user_secret(self, user):
@@ -253,11 +253,6 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
 
     def delete_user_secret(self, user):
         self._delete_user_secret(user)
-        self.conn.commit()
-
-    def replace_user_secret(self, user, gaus, pincode=None):
-        self._delete_user_secret(user)
-        self._save_user_secret(user, gaus, pincode)
         self.conn.commit()
 
 
@@ -288,3 +283,30 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
         (hashcode,) = row
 
         return self._verify_by_hashcode(pincode, hashcode)
+
+    def _delete_user_hashcode(self, user):
+        cur = self.conn.cursor()
+        cur.execute('''
+            DELETE FROM pincodes 
+                  WHERE userid=(SELECT userid
+                                  FROM users
+                                 WHERE username=%s)''', (user,))
+        
+    def save_user_hashcode(self, user, hashcode):
+        self._delete_user_hashcode(user)
+
+        cur = self.conn.cursor()
+
+        cur.execute('''
+            INSERT INTO pincodes
+                        (userid, pincode)
+                 VALUES ((SELECT userid
+                            FROM users
+                           WHERE username=%s), %s)''', (user, hashcode,))
+
+        self.conn.commit()
+
+    def delete_user_hashcode(self, user):
+        self._delete_user_hashcode(user)
+        self.conn.commit()
+

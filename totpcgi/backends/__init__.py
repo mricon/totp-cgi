@@ -117,10 +117,6 @@ class GASecretBackend:
     def delete_user_secret(self, user):
         pass
 
-    def replace_user_secret(self, user, gaus, pincode=None):
-        self.delete_user_secret(user)
-        self.save_user_secret(user, gaus, pincode)
-        
 class GAPincodeBackend:
     def __init__(self):
         pass
@@ -128,27 +124,22 @@ class GAPincodeBackend:
     def verify_user_pincode(self, user, pincode):
         pass
 
+    def save_user_hashcode(self, user, pincode):
+        pass
+
+    def delete_user_hashcode(self, user):
+        pass
+
     def _verify_by_hashcode(self, pincode, hashcode):
+        logger.debug('Will test against %s' % hashcode)
+        from passlib.apps import custom_app_context as pwd_context
+
         try:
-            (junk, algo, salt, junk) = hashcode.split('$', 3)
+            if not pwd_context.verify(pincode, hashcode):
+                raise totpcgi.UserPincodeError('Pincode did not match.')
+
+            return True
+
         except ValueError:
             raise totpcgi.UserPincodeError('Unsupported hashcode format')
 
-        if algo not in ('1', '5', '6', '2a', '2x', '2y'):
-            raise totpcgi.UserPincodeError('Unsupported hashcode format: %s' % algo)
-
-        if algo in ('2a', '2x', '2y'):
-            logger.debug('$%s$ found, will use bcrypt' % algo)
-
-            import bcrypt
-            if bcrypt.hashpw(pincode, hashcode) != hashcode:
-                raise totpcgi.UserPincodeError('Pincode did not match.')
-        else:
-            logger.debug('$%s$ found, will use crypt' % algo)
-
-            import crypt
-            salt_str = '$%s$%s' % (algo, salt)
-            if crypt.crypt(pincode, salt_str) != hashcode:
-                raise totpcgi.UserPincodeError('Pincode did not match.')
-
-        return True

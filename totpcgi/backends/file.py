@@ -23,7 +23,9 @@ import totpcgi.utils
 logger = logging.getLogger('totpcgi')
 
 import os
-from fcntl import flock, LOCK_EX, LOCK_UN
+from fcntl import flock, LOCK_EX, LOCK_UN, LOCK_SH
+
+import anydbm
 
 class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
     def __init__(self, pincode_file):
@@ -31,6 +33,39 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
         logger.debug('Using FILE Pincode backend')
 
         self.pincode_file = pincode_file
+
+    def _get_all_hashcodes(self):
+        hashcodes = {}
+
+        try:
+            fh = open(self.pincode_file, 'r')
+            flock(fh, LOCK_SH)
+
+            while True:
+                line = fh.readline()
+                if not line:
+                    break
+
+                if line.find(':') == -1:
+                    continue
+
+                line = line.strip()
+
+                parts = line.split(':')
+                logger.debug('user=%s, hashcode=%s' % (parts[0], parts[1]))
+                hashcodes[parts[0]] = parts[1]
+
+            logger.debug('Read %s entries from %s' % 
+                         (len(hashcodes), self.pincode_file))
+
+            flock(fh, LOCK_UN)
+            fh.close()
+
+        except IOError, e:
+            logger.debug('%s could not be open for reading' % self.pincode_file)
+
+        return hashcodes
+
 
     def verify_user_pincode(self, user, pincode):
         # The format is basically /etc/shadow, except we ignore anything
@@ -56,7 +91,6 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
             if dbmtime >= ptmtime:
                 logger.debug('.db mtime greater, will use the db')
 
-                import anydbm
                 db = anydbm.open(pincode_db_file, 'r')
 
                 if user in db.keys():
@@ -71,32 +105,52 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
         if hashcode is None:
             logger.debug('Reading pincode file: %s' % self.pincode_file)
 
-            fh = open(self.pincode_file, 'r')
+            hashcodes = self._get_all_hashcodes()
 
-            while True:
-                line = fh.readline()
-                
-                if line == '':
-                    break
-
-                if line.find(':') == -1:
-                    continue
-
-                line = line.strip()
-
-                parts = line.split(':')
-                if parts[0] == user:
-                    logger.debug('Found user %s' % user)
-                    hashcode = parts[1]
-                    break
-
-            fh.close()
-
-        if hashcode is None:
-            raise totpcgi.UserPincodeError('Pincode not found for user %s' % user)
+            try:
+                hashcode = hashcodes[user]
+            except KeyError:
+                raise totpcgi.UserPincodeError('Pincode not found for user %s' % user)
 
         return self._verify_by_hashcode(pincode, hashcode)
 
+    def save_user_hashcode(self, user, hashcode, makedb=True):
+        hashcodes = self._get_all_hashcodes()
+
+        if hashcode is None:
+            logger.debug('Hashcode is None, deleting %s' % user)
+            try:
+                hashcodes.pop(user)
+            except KeyError:
+                # wasn't there anyway
+                pass
+
+        else:
+            logger.debug('Setting new hashcode: %s:%s' % (user, hashcode))
+            hashcodes[user] = hashcode
+
+        # Bubble up any write errors up the chain
+        fh = open(self.pincode_file, 'w')
+        flock(fh, LOCK_EX)
+
+        for user, hashcode in hashcodes.iteritems():
+            fh.write('%s:%s\n' % (user, hashcode))
+
+        flock(fh, LOCK_UN)
+        fh.close()
+
+        if makedb:
+            # We always overwrite the db file to avoid any discrepancies with
+            # the text file.
+            pincode_db_file = self.pincode_file + '.db'
+            logger.debug('Compiling the db in %s' % pincode_db_file)
+
+            db = anydbm.open(pincode_db_file, 'n')
+            db.update(hashcodes)
+            db.close()
+
+    def delete_user_hashcode(self, user):
+        self.save_user_hashcode(user, None)
 
 class GASecretBackend(totpcgi.backends.GASecretBackend):
     def __init__(self, secrets_dir):
@@ -114,6 +168,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
             raise totpcgi.UserNotFound('%s.totp does not exist or is not readable' % user)
 
         fh = open(totp_file, 'r')
+        flock(fh, LOCK_SH)
 
         # secret is always the first entry
         secret = fh.readline()
@@ -158,6 +213,8 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
                     logger.debug('Non-numeric scratch token found')
                     # don't fail, just pretend we didn't see it
                     continue
+
+        flock(fh, LOCK_UN)
         fh.close()
 
         # Make sure that we have a window_size defined
@@ -180,6 +237,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
             raise totpcgi.SaveFailed('%s could not be saved: %s' % 
                     (totp_file, e))
 
+        flock(fh, LOCK_EX)
         secret = gaus.totp.secret
 
         if pincode is not None:
@@ -194,12 +252,13 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
         if pincode is None:
             fh.write('\n'.join(gaus.scratch_tokens))
 
+        flock(fh, LOCK_UN)
         fh.close()
 
         logger.debug('Wrote %s' % totp_file)
 
 
-    def delete_user_secret(self, gaus):
+    def delete_user_secret(self, user):
         totp_file = os.path.join(self.secrets_dir, user) + '.totp'
 
         try:
