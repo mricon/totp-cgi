@@ -206,7 +206,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
 
         return gaus
 
-    def save_user_secret(self, user, gaus, pincode):
+    def save_user_secret(self, user, gaus, pincode=None):
         cur = self.conn.cursor()
 
         self._delete_user_secret(user)
@@ -225,7 +225,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
                            WHERE username=%s),
                          %s, %s, %s, %s)''', 
                          (user, secret, gaus.rate_limit[0], gaus.rate_limit[1],
-                             window_size))
+                             gaus.window_size))
 
         for token in gaus.scratch_tokens:
             cur.execute('''
