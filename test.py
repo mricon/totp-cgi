@@ -343,8 +343,9 @@ class GATest(unittest.TestCase):
         # as we cannot currently set SECRETS_DIR in the cgi on the fly
         os.environ['REMOTE_ADDR'] = '127.0.0.1'
         os.environ['QUERY_STRING'] = 'user=bupkis&token=555555&mode=PAM_SM_AUTH'
+        os.environ['PYTHONPATH'] = '.'
 
-        command = ['env', 'python', 'totp.cgi', 'totpcgi.conf']
+        command = ['env', 'python', 'cgi/totp.cgi', 'conf/totpcgi.conf']
 
         ret = subprocess.check_output(command)
 
@@ -403,6 +404,7 @@ class GATest(unittest.TestCase):
             cleanState()
 
         elif PINCODE_BACKEND == 'pgsql':
+            backends.pincode_backend.delete_user_hashcode('valid')
             logger.debug('Testing without a user pincode record present')
             with self.assertRaisesRegexp(totpcgi.UserNotFound, 
                     'no pincodes record'):
