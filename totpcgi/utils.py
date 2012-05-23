@@ -31,7 +31,6 @@ logger = logging.getLogger('totpcgi')
 
 from Crypto.Cipher import AES
 from passlib.utils.pbkdf2 import pbkdf2
-from Crypto.Random import random
 
 AES_BLOCK_SIZE = 16
 KDF_ITER       = 2000
@@ -60,15 +59,28 @@ def hash_pincode(pincode, algo='bcrypt'):
 
 
 def generate_secret(rate_limit=(3,30), window_size=17, scratch_tokens=5):
-    secret = pyotp.random_base32(random=random)
+    good_chars = base64._b32alphabet.values()
+
+    secret = ''
+    while len(secret) < 16:
+        rchar = os.urandom(1)
+        if rchar in good_chars:
+            secret += rchar
 
     gaus = totpcgi.GAUserSecret(secret)
 
     gaus.rate_limit  = rate_limit
     gaus.window_size = window_size
 
+    good_chars = '0123456789'
     for i in xrange(scratch_tokens):
-        gaus.scratch_tokens.append(str(random.randint(0, 99999999)).zfill(8))
+        scratch_token = ''
+        while len(scratch_token) < 8:
+            rchar = os.urandom(1)
+            if rchar in good_chars:
+                scratch_token += rchar
+
+        gaus.scratch_tokens.append(scratch_token)
 
     return gaus
 
