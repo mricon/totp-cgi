@@ -242,6 +242,9 @@ def cgimain():
         pincode = None
 
     backends.secret_backend.save_user_secret(user, gaus, pincode)
+    # purge all old state, as it's now obsolete
+
+    backends.state_backend._remove_user_state(user)
 
     show_totp_page(config, user, gaus)
 
