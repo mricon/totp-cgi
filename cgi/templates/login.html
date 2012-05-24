@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" 
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+    <head>
+        <title>Example Company Google Authenticator provisioning</title>
+        <link href="$css_url" rel="stylesheet" type="text/css" />
+    </head>
+    <body>
+        <div id="mainwindow" class="login">
+            <div id="title">Example Company Ltd</div>
+            <div id="mainarea">
+                <div class="message">
+                    Please log in to obtain your new Google Authenticator 
+                    secret.
+                </div>
+                <form id="login_form" name="login_form" action="$action_url" method="post">
+                    <table border="0" align="center">
+                        <tr>
+                            <td class="fieldname">
+                                <label for="username">Username:</label>
+                            </td>
+                            <td>
+                                <input type="text" id="username" name="username" class="inputfield"/>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="fieldname">
+                                <label for="pincode">Pincode:</label>
+                            </td>
+                            <td>
+                                <input type="password" id="pincode" name="pincode" class="inputfield"/>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="fieldname"></td>
+                            <td>
+                                <input type="submit" value="Submit &raquo;"/>
+                            </td>
+                        </tr>
+                    </table>
+                </form>
+            </div>
+            <div id="copyright">
+                Copyright &copy; 2012 by Example Company Ltd
+            </div>
+        </div>
+    </body>
+</html>

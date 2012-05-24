@@ -30,6 +30,10 @@ import totpcgi
 import totpcgi.backends
 import totpcgi.utils
 
+import qrcode
+from qrcode.image import svg
+from StringIO import StringIO
+
 from string import Template
 
 if len(sys.argv) > 1:
@@ -54,47 +58,65 @@ except totpcgi.backends.BackendNotSupported, ex:
 
 syslog.openlog('provisioning.cgi', syslog.LOG_PID, syslog.LOG_AUTH)
 
-def bad_request(why):
-    #TODO: Make friendlier
-    output = 'ERR\n' + why + '\n'
+def bad_request(config, why):
+    templates_dir = config.get('main', 'templates_dir')
+    fh = open(os.path.join(templates_dir, 'error.html'))
+    tpt = Template(fh.read())
+    fh.close()
+
+    vals = {
+            'action_url':   config.get('main', 'action_url'),
+            'css_url':      config.get('main', 'css_url'),
+            'errormsg':     why
+    }
+
+    out = tpt.safe_substitute(vals)
+
     sys.stdout.write('Status: 400 BAD REQUEST\n')
-    sys.stdout.write('Content-type: text/plain\n')
-    sys.stdout.write('Content-Length: %s\n' % len(output))
+    sys.stdout.write('Content-type: text/html\n')
+    sys.stdout.write('Content-Length: %s\n' % len(out))
     sys.stdout.write('\n')
 
-    sys.stdout.write(output)
+    sys.stdout.write(out)
+    sys.exit(0)
+
+def show_qr_code(data):
+    qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=5,
+            border=4)
+
+    qr.add_data(data)
+    qr.make(fit=True)
+
+    img = qr.make_image()
+
+    fh = StringIO()
+    img.save(fh)
+    out = fh.getvalue()
+    fh.close()
+
+    sys.stdout.write('Status: 200 OK\n')
+    sys.stdout.write('Content-type: image/png\n')
+    sys.stdout.write('Content-Length: %s\n' % len(out))
+    sys.stdout.write('\n')
+
+    sys.stdout.write(out)
     sys.exit(0)
 
 def show_login_form(config):
-    #TODO: CSRF token
-    domain_title = config.get('main', 'domain_title')
-    action_url   = config.get('main', 'action_url')
+    templates_dir = config.get('main', 'templates_dir')
+    fh = open(os.path.join(templates_dir, 'login.html'))
+    tpt = Template(fh.read())
+    fh.close()
 
-    tpt = Template('''
-    <html>
-        <head>
-            <title>$domain_title</title>
-        </head>
-        <body>
-        <h1>$domain_title</h1>
-        <form id="login_form" name="login_form" action="$action_url" method="post">
-            <p id="p_username">
-                <label for="username">Username:</label>
-                <input type="text" id="username" name="username"/>
-            </p>
-            <p id="p_pincode">
-                <label for="pincode">Pincode:</label>
-                <input type="password" id="pincode" name="pincode"/>
-            </p>
-            <p id="p_submit">
-                <input type="submit" value="Submit &raquo;"/>
-            </p>
-        </form>
-        </body>
-    </html>
-    ''')
+    vals = {
+            'action_url':   config.get('main', 'action_url'),
+            'css_url':      config.get('main', 'css_url')
+    }
 
-    out = tpt.safe_substitute(domain_title=domain_title, action_url=action_url)
+    out = tpt.safe_substitute(vals)
     
     sys.stdout.write('Status: 200 OK\n')
     sys.stdout.write('Content-type: text/html\n')
@@ -104,10 +126,53 @@ def show_login_form(config):
     sys.stdout.write(out)
     sys.exit(0)
 
+def show_totp_page(config, user, gaus):
+    # generate provisioning URI
+    tpt = Template(config.get('main', 'totp_user_mask'))
+    totp_user = tpt.safe_substitute(username=user)
+    totp_qr_uri = gaus.totp.provisioning_uri(totp_user)
+
+    action_url = config.get('main', 'action_url')
+    
+    qrcode_embed = '<img src="%s?qrcode=%s"/>' % (action_url, totp_qr_uri)
+
+    templates_dir = config.get('main', 'templates_dir')
+    fh = open(os.path.join(templates_dir, 'totp.html'))
+    tpt = Template(fh.read())
+    fh.close()
+    
+    if gaus.scratch_tokens:
+        scratch_tokens = '<br/>'.join(gaus.scratch_tokens)
+    else:
+        scratch_tokens = '&nbsp;'
+
+    vals = {
+            'action_url':     action_url,
+            'css_url':        config.get('main', 'css_url'),
+            'qrcode_embed':   qrcode_embed,
+            'scratch_tokens': scratch_tokens
+    }
+
+    out = tpt.safe_substitute(vals)
+
+    sys.stdout.write('Status: 200 OK\n')
+    sys.stdout.write('Content-type: text/html\n')
+    sys.stdout.write('Content-Length: %s\n' % len(out))
+    sys.stdout.write('\n')
+
+    sys.stdout.write(out)
+    sys.exit(0)
+
 def generate_secret(config):
+    encrypt_secret = config.getboolean('main', 'encrypt_secret')
     window_size = config.getint('main', 'window_size')
     rate_limit = config.get('main', 'rate_limit')
-    scratch_tokens_n = config.get('main', 'scratch_tokens_n')
+
+    # scratch tokens don't make any sense with encrypted secret
+    if not encrypt_secret:
+        scratch_tokens_n = config.getint('main', 'scratch_tokens_n')
+    else:
+        scratch_tokens_n = 0
 
     (times, secs) = rate_limit.split(',')
     rate_limit = (int(times), int(secs))
@@ -120,6 +185,13 @@ def generate_secret(config):
 
 def cgimain():
     form = cgi.FieldStorage()
+
+    if 'qrcode' in form:
+        if os.environ['HTTP_REFERER'].find(os.environ['SERVER_NAME']) == -1:
+            bad_request(config, 'Sorry, you failed the HTTP_REFERER check')
+
+        qrcode = form.getfirst('qrcode')
+        show_qr_code(qrcode)
 
     must_keys = ('username', 'pincode')
 
@@ -139,35 +211,39 @@ def cgimain():
         syslog.syslog(syslog.LOG_NOTICE,
             'Failure: user=%s, host=%s, message=%s' % (user, remote_host, 
                 str(ex)))
-        bad_request(str(ex))
+        bad_request(config, str(ex))
 
     syslog.syslog(syslog.LOG_NOTICE, 
         'Success: user=%s, host=%s' % (user, remote_host)) 
 
-    # pincode verified, now generate the secret and store it
-    
+    # pincode verified
+    # is there an existing secret for this user?
+
+    exists = True
+
     try:
-        generate_secret(config)
+        backends.secret_backend.get_user_secret(user, pincode)
+    except totpcgi.UserNotFound:
+        # if we got it, then there isn't an existing secret in place
+        exists = False
 
-        # if we don't need to encrypt the secret, set pincode to None
-        encrypt_secret = config.getboolean('main', 'encrypt_secret')
-        if not encrypt_secret:
-            pincode = None
-
-        backends.secret_backend.save_user_secret(user, gaus, pincode)
-
-    except Exception, ex:
+    if exists:
         syslog.syslog(syslog.LOG_NOTICE,
-            'Failed to generate secret: user=%s, host=%s, message=%s' % (user, 
-                remote_host, str(ex)))
-        bad_request(str(ex))
+            'Secret exists: user=%s, host=%s' % (user, remote_host))
+        bad_request(config, 'Existing secret found. It must be removed first.')
 
-    sys.stdout.write('Status: 200 OK\n')
-    sys.stdout.write('Content-type: text/plain\n')
-    sys.stdout.write('Content-Length: %s\n' % len(out))
-    sys.stdout.write('\n')
+    # now generate the secret and store it
+    
+    gaus = generate_secret(config)
 
-    sys.stdout.write(out)
+    # if we don't need to encrypt the secret, set pincode to None
+    encrypt_secret = config.getboolean('main', 'encrypt_secret')
+    if not encrypt_secret:
+        pincode = None
+
+    backends.secret_backend.save_user_secret(user, gaus, pincode)
+
+    show_totp_page(config, user, gaus)
 
 
 if __name__ == '__main__':

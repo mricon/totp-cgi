@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" 
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+    <head>
+        <title>Example Company Google Authenticator Provisioning</title>
+        <link href="$css_url" rel="stylesheet" type="text/css" />
+    </head>
+    <body>
+        <div id="mainwindow" class="totp">
+            <div id="title">Example Company Google Authenticator Provisioning</div>
+            <div id="mainarea">
+                <div id="qrcode">
+                $qrcode_embed
+                </div>
+                <div id="explanation">
+                    <p>
+                    Your new Google Authenticator token has been issued.
+                    To import this token into your device, simply go to your
+                    Google Authenticator app, select the option to add an
+                    account, and then select "Scan Barcode". Point the camera
+                    at the QR Barcode displayed next to this message. Google
+                    Authenticator will then import your new token into the
+                    device. It should be ready to use immediately.
+                    </p>
+                </div>
+                <div id="scratch_tokens">
+                    <p>
+                    If the administrator permitted the use of scratch tokens,
+                    you should see them listed below. If you lose access to
+                    your Google Authenticator device, you should be able to
+                    use one of these tokens to gain emergency access to your
+                    account. Please write them down.
+                    </p>
+                    <div id="scratch_tokens_list">
+                        $scratch_tokens
+                    </div>
+                </div>
+                <div id="support_requests">
+                    <p>
+                    If you require any help with your Google Authenticator
+                    token or experience any difficulty importing it into
+                    your mobile device, please email
+                    <a href="mailto:support@example.com">support@example.com</a>
+                    or call (555) 555-1212.
+                </div>
+            </div>
+            <div id="copyright">
+                Copyright &copy; 2012 by Example Company Ltd
+            </div>
+        </div>
+    </body>
+</html>

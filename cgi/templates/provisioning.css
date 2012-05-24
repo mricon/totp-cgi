@@ -1,0 +1,99 @@
+body {
+    text-align: center;
+    padding-top: 50pt;
+    font-family: sans-serif;
+}
+
+#mainwindow {
+    text-align: left;
+    margin: 0 auto;
+}
+
+.login {
+    border: 1px solid gray;
+    width: 250pt;
+}
+
+.status {
+    border-top: 1px solid gray;
+    border-bottom: 1px solid gray;
+    width: 350pt;
+}
+
+.totp {
+    border-top: 1px solid gray;
+    border-bottom: 1px solid gray;
+    width: 500pt;
+}
+
+#qrcode {
+    float: right;
+}
+	
+#title {
+    background-color: silver; 
+    color: white; 
+    font-size: large;
+    border-bottom: 1px solid gray; 
+    text-align: center;
+    font-weight: bold;
+}
+
+#mainarea {
+    padding-top: 5pt;
+    padding-bottom: 5pt;
+}
+
+#scratch_tokens_list {
+    font-weight: bold;
+    font-size: 120%;
+    border: 1px dashed gray;
+    width: 12em;
+    padding: 0.5em 1em;
+}
+	
+.message {
+    margin-left: 10pt;
+    margin-right: 10pt;
+    font-size: smaller;
+    background-color: whitesmoke;
+    text-align: center;
+    font-weight: bold;
+}
+
+.warning {
+    margin-left: 10pt;
+    margin-right: 10pt;
+    font-size: smaller;
+    background-color: whitesmoke;
+    text-align: center;
+}
+
+.error {
+    color: red;
+}
+      
+.fieldname {
+    text-align: right;
+}
+
+.inputfield {
+    border: 1px solid gray;
+    background-color: whitesmoke;
+    width: 140pt;
+}
+
+.inputfield:focus {
+    border: 1px solid red;
+    background-color: mistyrose;
+}
+
+#copyright {
+    background-color: silver;
+    color: white;
+    font-size: x-small;
+    border-top: 1px solid gray;
+    text-align: right;
+    clear: all;
+}
+
