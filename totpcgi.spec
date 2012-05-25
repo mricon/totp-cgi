@@ -113,8 +113,8 @@ install -m 0644 contrib/vhost-totpcgi-provisioning.conf \
 # Install totpprov script and manpage
 mkdir -p -m 0755 %{buildroot}%{_bindir}
 install -m 0755 contrib/totpprov.py %{buildroot}%{_bindir}/totpprov
-mkdir -p -m 0755 %{buildroot}%{_mandir}
-install -m 0644 contrib/totpprov.5 %{buildroot}%{_mandir}/5/
+mkdir -p -m 0755 %{buildroot}%{_mandir}/man5
+install -m 0644 contrib/totpprov.5 %{buildroot}%{_mandir}/man5/
 
 # Install SELinux files
 for selinuxvariant in %{selinux_variants}
@@ -156,8 +156,6 @@ fi
 %doc README.rst INSTALL.rst
 %doc contrib
 %doc cgi/totp.fcgi
-%dir %attr(-, %{totpcgiprovuser}, %{totpcgiuser}) %{_sysconfdir}/totpcgi
-%dir %attr(-, %{totpcgiprovuser}, %{totpcgiuser}) %{_sysconfdir}/totpcgi/totp
 %dir %attr(-, %{totpcgiuser}, %{totpcgiuser}) %{_localstatedir}/www/totpcgi
 %attr(-, %{totpcgiuser}, %{totpcgiuser}) %{_localstatedir}/www/totpcgi/*.cgi
 %config(noreplace) %attr(-, -, %{totpcgiuser}) %{_sysconfdir}/totpcgi/totpcgi.conf
