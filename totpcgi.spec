@@ -41,7 +41,7 @@ totpcgi-provisioning.
 %package provisioning
 Summary:    CGI for Google Authenticator provisioning using totpcgi
 Requires:   python-totpcgi = %{version}-%{release}
-Requires:   httpd, mod_ssl
+Requires:   httpd, mod_ssl, python-qrcode
 
 %description provisioning
 This package provides the CGI for provisioning Google Authenticator tokens
@@ -121,9 +121,9 @@ done
 
 %pre
 # We always add both the totpcgi and totpcgi-provisioning user
-/usr/sbin/useradd -r -c "Totpcgi user" \
+/usr/sbin/useradd -c "Totpcgi user" \
 	-M -s /sbin/nologin -d /var/lib/totpcgi %{totpcgiuser} 2> /dev/null || :
-/usr/sbin/useradd -r -c "Totpcgi provisioning user" \
+/usr/sbin/useradd -c "Totpcgi provisioning user" \
 	-M -s /sbin/nologin -d /etc/totpcgi %{totpcgiprovuser} 2> /dev/null || :
 
 
@@ -153,7 +153,7 @@ fi
 %dir %attr(-, %{totpcgiprovuser}, %{totpcgiuser}) %{_sysconfdir}/totpcgi/totp
 %dir %attr(-, %{totpcgiuser}, %{totpcgiuser}) %{_localstatedir}/www/totpcgi
 %attr(-, %{totpcgiuser}, %{totpcgiuser}) %{_localstatedir}/www/totpcgi/*.cgi
-%config(noreplace) %attr(-, %{totpcgiuser}, %{totpcgiuser}) %{_sysconfdir}/totpcgi/totpcgi.conf
+%config(noreplace) %attr(-, -, %{totpcgiuser}) %{_sysconfdir}/totpcgi/totpcgi.conf
 %config(noreplace) %{_sysconfdir}/httpd/conf.d/totpcgi.conf
 %attr(-, %{totpcgiuser}, %{totpcgiuser}) %{_localstatedir}/lib/totpcgi
 
@@ -164,12 +164,13 @@ fi
 %files provisioning
 %dir %attr(-, %{totpcgiprovuser}, %{totpcgiuser}) %{_sysconfdir}/totpcgi
 %dir %attr(-, %{totpcgiprovuser}, %{totpcgiuser}) %{_sysconfdir}/totpcgi/totp
-%dir %attr(-, -, %{totpcgiprovuser}) %{_sysconfdir}/totpcgi/templates
 %dir %attr(-, %{totpcgiprovuser}, %{totpcgiprovuser}) %{_localstatedir}/www/totpcgi-provisioning
 %attr(-, %{totpcgiprovuser}, %{totpcgiprovuser}) %{_localstatedir}/www/totpcgi-provisioning/*.cgi
 %config(noreplace) %{_localstatedir}/www/totpcgi-provisioning/*.css
-%config(noreplace) %attr(-, %{totpcgiprovuser}, %{totpcgiprovuser}) %{_sysconfdir}/totpcgi/provisioning.conf
+%config(noreplace) %attr(-, -, %{totpcgiprovuser}) %{_sysconfdir}/totpcgi/provisioning.conf
 %config(noreplace) %{_sysconfdir}/httpd/conf.d/totpcgi-provisioning.conf
+%dir %attr(-, -, %{totpcgiprovuser}) %{_sysconfdir}/totpcgi/templates
+%config(noreplace) %attr(-, -, %{totpcgiprovuser}) %{_sysconfdir}/totpcgi/templates/*.html
 
 %files selinux
 %defattr(-,root,root,0755)
