@@ -1,0 +1,7 @@
+@import url("provisioning.css");
+
+#qrcode {
+    float: right;
+    visibility: hidden;
+}
+

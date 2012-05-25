@@ -66,7 +66,7 @@ def bad_request(config, why):
 
     vals = {
             'action_url':   config.get('main', 'action_url'),
-            'css_url':      config.get('main', 'css_url'),
+            'css_root':     config.get('main', 'css_root'),
             'errormsg':     why
     }
 
@@ -113,7 +113,7 @@ def show_login_form(config):
 
     vals = {
             'action_url':   config.get('main', 'action_url'),
-            'css_url':      config.get('main', 'css_url')
+            'css_root':     config.get('main', 'css_root')
     }
 
     out = tpt.safe_substitute(vals)
@@ -148,7 +148,7 @@ def show_totp_page(config, user, gaus):
 
     vals = {
             'action_url':     action_url,
-            'css_url':        config.get('main', 'css_url'),
+            'css_root':       config.get('main', 'css_root'),
             'qrcode_embed':   qrcode_embed,
             'scratch_tokens': scratch_tokens
     }
