@@ -155,7 +155,11 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
             cur.execute('SELECT True FROM secrets WHERE userid=%s', (userid,))
             if not cur.fetchone():
                 logger.debug('No entries left for user=%s, deleting' % user)
-                cur.execute('DELETE FROM users WHERE userid=%s', (userid,))
+                try:
+                    cur.execute('DELETE FROM users WHERE userid=%s', (userid,))
+                except psycopg2.ProgrammingError:
+                    # we may not have permissions, so ignore this failure.
+                    pass
 
         self.conn.commit()
 
