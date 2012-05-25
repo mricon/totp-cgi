@@ -62,6 +62,14 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
         except Exception, ex:
             raise totpcgi.UserPincodeError('LDAP bind failed: %s' % ex)
 
+    def save_user_hashcode(self, user, pincode, makedb=True):
+        raise totpcgi.backends.BackendNotSupported(
+                'LDAP backend does not support saving pincodes.')
+
+    def delete_user_hashcode(self, user):
+        raise totpcgi.backends.BackendNotSupported(
+                'LDAP backend does not support deleting pincodes.')
+
 class GAStateBackend:
     def __init__(self):
         raise totpcgi.backends.BackendNotSupported(
