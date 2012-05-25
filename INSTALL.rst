@@ -121,7 +121,7 @@ tarball. Copy them over to the server and run::
 
 Provision some secrets
 ~~~~~~~~~~~~~~~~~~~~~~
-Totp-cgi uses the same file format for TOTP secrets as files generated
+Totpcgi uses the same file format for TOTP secrets as files generated
 by google-authenticator. To manually provision a secret, do::
 
     yum install google-authenticator
@@ -281,13 +281,13 @@ re-provisioned.
 
 Encryption needs to be done during the provisioning stage. If the
 administrator provisions the tokens manually, they can use the
-"encrypt-secret.py" utility in the contrib directory. If some other
-process is used, you should rely on the implementation in that file to
-generate encrypted secrets that totpcgi can handle.
+"totpprov" utility in the contrib directory to encrypt existing secrets.
+If some other process is used, you should rely on the implementation in
+that file to generate encrypted secrets that totpcgi can handle.
 
 .. warning::
 
-    One-time scratch tokens are completely ignored by totp-cgi when
+    One-time scratch tokens are completely ignored by totpcgi when
     encrypted secrets are used, as doing otherwise would defeat the
     point of encrypting the master secret.
 
@@ -378,9 +378,10 @@ look at FreeIPA (in RHEL6.2 and above as "ipa-server").
 Provisioning
 ------------
 Starting with version 0.5, we include full support for provisioning
-tokens. You can use the provisioning.cgi that ships with the project, or
-you can use it as an example implementation in order to incorporate
-provisioning support into your existing web infrastructure.
+tokens. You can use the provisioning.cgi that ships with the project for
+user-initiated provisioning, or you can use it as an example
+implementation in order to incorporate provisioning support into your
+existing web infrastructure.
 
 .. note::
 
@@ -439,5 +440,5 @@ Restart httpd, and see if everything is working right.
     If provisioning.cgi finds an existing token, it will refuse to issue
     a new one. To re-issue a token to someone, first delete the existing
     token either by deleting the file from totp directory, or by using
-    the "rmsecret.py" script provided in the contrib directory.
+    the "totpprov" utility provided in the contrib directory.
 
