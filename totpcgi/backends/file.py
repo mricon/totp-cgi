@@ -360,7 +360,7 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
 
         logger.debug('fhs=%s' % self.fhs)
 
-    def _remove_user_state(self, user):
+    def delete_user_state(self, user):
         # this should ONLY be used by test.py
         state_file = os.path.join(self.state_dir, '%s.json' % user)
         if os.access(state_file, os.R_OK):

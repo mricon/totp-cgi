@@ -26,12 +26,36 @@ logger = logging.getLogger('totpcgi')
 
 # Globally track the database connections
 dbconn = {}
+userids = {}
 
 def db_connect(connect_string):
+    global dbconn
+
     if connect_string not in dbconn:
         dbconn[connect_string] = psycopg2.connect(connect_string)
 
     return dbconn[connect_string]
+
+def get_user_id(conn, user):
+    global userids
+
+    if user in userids.keys():
+        return userids[user]
+
+    cur = conn.cursor()
+    logger.debug('Checking users record for %s' % user)
+
+    cur.execute('SELECT userid FROM users WHERE username = %s', (user,))
+    row = cur.fetchone()
+
+    if row is None:
+        logger.debug('No existing record for user=%s, creating' % user)
+        cur.execute('INSERT INTO users (username) VALUES (%s)', (user,))
+        cur.execute('SELECT userid FROM users WHERE username = %s', (user,))
+        row = cur.fetchone()
+
+    userids[user] = row[0]
+    return userids[user]
 
 class GAStateBackend(totpcgi.backends.GAStateBackend):
     def __init__(self, connect_string):
@@ -44,56 +68,35 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
         self.locks = {}
 
     def get_user_state(self, user):
-        cur = self.conn.cursor()
 
-        logger.debug('Looking up state info for user %s' % user)
-
-        cur.execute('SELECT userid FROM users WHERE username = %s', (user,))
-        row = cur.fetchone()
+        userid = get_user_id(self.conn, user)
 
         state = totpcgi.GAUserState()
 
-        if row is not None:
-            logger.debug('Existing record found for user=%s, loading' % user)
+        logger.debug('Creating advisory lock for userid=%s' % userid)
+        
+        cur = self.conn.cursor()
+        cur.execute('SELECT pg_advisory_lock(%s)', (userid,))
+        self.locks[user] = userid 
 
-            (userid,) = row
-            logger.debug('Creating advisory lock for userid=%s' % userid)
-            
-            cur.execute('SELECT pg_advisory_lock(%s)', (userid,))
-            self.locks[user] = userid 
+        cur.execute('''
+            SELECT timestamp, success
+              FROM timestamps
+             WHERE userid = %s''', (userid,))
 
-            cur.execute('''
-                SELECT timestamp, success
-                  FROM timestamps
-                 WHERE userid = %s''', (userid,))
+        for (timestamp, success) in cur.fetchall():
+            if success:
+                state.success_timestamps.append(timestamp)
+            else:
+                state.fail_timestamps.append(timestamp)
 
-            for (timestamp, success) in cur.fetchall():
-                if success:
-                    state.success_timestamps.append(timestamp)
-                else:
-                    state.fail_timestamps.append(timestamp)
+        cur.execute('''
+            SELECT token
+              FROM used_scratch_tokens
+             WHERE userid = %s''', (userid,))
 
-            cur.execute('''
-                SELECT token
-                  FROM used_scratch_tokens
-                 WHERE userid = %s''', (userid,))
-
-            for (token,) in cur.fetchall():
-                state.used_scratch_tokens.append(token)
-
-        else:
-            logger.debug('No existing record for user=%s, creating' % user)
-
-            cur.execute('INSERT INTO users (username) VALUES (%s)', (user,))
-
-            cur.execute('SELECT userid FROM users WHERE username = %s', (user,))
-            row = cur.fetchone()
-
-            (userid,) = row
-            logger.debug('Creating advisory lock for userid=%s' % userid)
-            
-            cur.execute('SELECT pg_advisory_lock(%s)', (userid,))
-            self.locks[user] = userid 
+        for (token,) in cur.fetchall():
+            state.used_scratch_tokens.append(token)
 
         return state
 
@@ -132,21 +135,28 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
 
         del self.locks[user]
 
-    def _remove_user_state(self, user):
+    def delete_user_state(self, user):
         cur = self.conn.cursor()
         logger.debug('Deleting state records for user=%s' % user)
 
-        # should cascade correctly
+        userid = get_user_id(self.conn, user)
+
         cur.execute('''
             DELETE FROM timestamps
-                  WHERE userid=(SELECT userid
-                                    FROM users
-                                   WHERE username=%s)''', (user,))
+                  WHERE userid=%s''' % (userid,))
         cur.execute('''
             DELETE FROM used_scratch_tokens
-                  WHERE userid=(SELECT userid
-                                    FROM users
-                                   WHERE username=%s)''', (user,))
+                  WHERE userid=%s''' % (userid,))
+
+        # If there are no pincodes or secrets entries, then we may as well
+        # delete the user record.
+        cur.execute('SELECT True FROM pincodes WHERE userid=%s', (userid,))
+        if not cur.fetchone():
+            cur.execute('SELECT True FROM secrets WHERE userid=%s', (userid,))
+            if not cur.fetchone():
+                logger.debug('No entries left for user=%s, deleting' % user)
+                cur.execute('DELETE FROM users WHERE userid=%s', (userid,))
+
         self.conn.commit()
 
 class GASecretBackend(totpcgi.backends.GASecretBackend):
@@ -211,6 +221,8 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
 
         self._delete_user_secret(user)
 
+        userid = get_user_id(self.conn, user)
+
         secret = gaus.totp.secret
 
         if pincode is not None:
@@ -220,36 +232,28 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
             INSERT INTO secrets 
                         (userid, secret, rate_limit_times,
                          rate_limit_seconds, window_size)
-                 VALUES ((SELECT userid 
-                            FROM users 
-                           WHERE username=%s),
-                         %s, %s, %s, %s)''', 
-                         (user, secret, gaus.rate_limit[0], gaus.rate_limit[1],
+                 VALUES (%s, %s, %s, %s, %s)''', 
+                        (userid, secret, gaus.rate_limit[0], gaus.rate_limit[1],
                              gaus.window_size))
 
         for token in gaus.scratch_tokens:
             cur.execute('''
                     INSERT INTO scratch_tokens
                                 (userid, token)
-                         VALUES ((SELECT userid
-                                    FROM users
-                                   WHERE username=%s),
-                                 %s)''', (user, token,))
+                         VALUES (%s, %s)''', (userid, token,))
 
         self.conn.commit()
 
     def _delete_user_secret(self, user):
+        userid = get_user_id(self.conn, user)
+
         cur = self.conn.cursor()
         cur.execute('''
             DELETE FROM secrets
-                  WHERE userid=(SELECT userid
-                                  FROM users
-                                 WHERE username=%s)''', (user,))
+                  WHERE userid=%s''', (userid,))
         cur.execute('''
             DELETE FROM scratch_tokens
-                  WHERE userid=(SELECT userid
-                                  FROM users
-                                 WHERE username=%s)''', (user,))
+                  WHERE userid=%s''', (userid,))
 
     def delete_user_secret(self, user):
         self._delete_user_secret(user)
@@ -285,24 +289,24 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
         return self._verify_by_hashcode(pincode, hashcode)
 
     def _delete_user_hashcode(self, user):
+        userid = get_user_id(self.conn, user)
+
         cur = self.conn.cursor()
         cur.execute('''
             DELETE FROM pincodes 
-                  WHERE userid=(SELECT userid
-                                  FROM users
-                                 WHERE username=%s)''', (user,))
+                  WHERE userid=%s''', (userid,))
         
-    def save_user_hashcode(self, user, hashcode):
+    def save_user_hashcode(self, user, hashcode, makedb=False):
         self._delete_user_hashcode(user)
+
+        userid = get_user_id(self.conn, user)
 
         cur = self.conn.cursor()
 
         cur.execute('''
             INSERT INTO pincodes
                         (userid, pincode)
-                 VALUES ((SELECT userid
-                            FROM users
-                           WHERE username=%s), %s)''', (user, hashcode,))
+                 VALUES (%s, %s)''', (userid, hashcode,))
 
         self.conn.commit()
 

@@ -118,7 +118,7 @@ def setCustomPincode(pincode, algo='sha256', user='valid', makedb=True, addjunk=
 def cleanState(user='valid'):
     logger.debug('Cleaning state for user %s' % user)
     backends = getBackends()
-    backends.state_backend._remove_user_state(user)
+    backends.state_backend.delete_user_state(user)
 
 def setCustomState(state, user='valid'):
     logger.debug('Setting custom state for user %s' % user)

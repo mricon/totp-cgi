@@ -19,7 +19,7 @@ Next, create the secrets and state directories::
 
 Next, create the user that the CGI will be running as::
 
-    useradd -M -s/sbin/nologin -d/var/lib/totpcgi
+    useradd -M -s/sbin/nologin -d/var/lib/totpcgi totpcgi
 
 Set the ownership on directories::
 
@@ -62,38 +62,19 @@ Install Regular CGI
 Copy totp.cgi into /var/www/totpcgi/index.cgi and set the permissions::
 
     mkdir -p -m 0551 /var/www/totpcgi
-    cp -a totp.cgi /var/www/totpcgi/index.cgi
+    cp -a cgi/totp.cgi /var/www/totpcgi/index.cgi
     chown -R totpcgi:totpcgi /var/www/totpcgi
     chmod 0550 /var/www/totpcgi/index.cgi
 
-Create the apache config file in /etc/httpd/conf.d/totpcgi.conf::
+Create the config file in /etc/httpd/conf.d/totpcgi.conf using the
+vhost-totpcgi.conf template provided in contrib directory, and modify it
+accordingly to use FCGI instead of CGI.
 
-    <VirtualHost [your-server-ip]:443>
-        ServerAdmin [bob@example.com]
-        DocumentRoot /var/www/totpcgi
-        ServerName totp.example.com
-        ErrorLog /var/log/httpd/totpcgi-error.log
-        CustomLog /var/log/httpd/totpcgi-access.log common
-        SuexecUserGroup totpcgi totpcgi
-        AddHandler cgi-script .cgi
-        DirectoryIndex index.cgi
+.. note::
 
-        SSLEngine on
-        SSLCertificateFile /etc/pki/tls/certs/totp-server.crt
-        SSLCertificateKeyFile /etc/pki/tls/private/totp-server.key
-        SSLCACertificateFile /etc/pki/tls/certs/totpcgi-ca.crt
-
-        SSLVerifyClient require
-        SSLVerifyDepth 10
-
-        CustomLog /var/log/httpd/totpcgi-ssl-request-log \
-                  "%t %h %{SSL_PROTOCOL}x %{SSL_CIPHER}x \"%r\" %b"
-
-        <Directory "/var/www/totpcgi">
-                Options ExecCGI
-        </Directory>
-
-    </VirtualHost>
+    The default configuration runs on port 8443, as this makes it easier
+    to deploy provisioning.cgi on the same host. It is up to you whether
+    you want to use this configuration or not.
 
 Install FastCGI
 ~~~~~~~~~~~~~~~
@@ -111,38 +92,13 @@ Start by installing mod_fcgid and flup::
 Next, copy the .fcgi in place, following the same procedure as .cgi::
 
     mkdir -p -m 0551 /var/www/totpcgi
-    cp -a totp.fcgi /var/www/totpcgi/index.fcgi
+    cp -a cgi/totp.fcgi /var/www/totpcgi/index.fcgi
     chown -R totpcgi:totpcgi /var/www/totpcgi
     chmod 0550 /var/www/totpcgi/index.fcgi
 
-Create the config file in /etc/httpd/conf.d/totpcgi.conf::
-
-    <VirtualHost [your-server-ip]:443>
-        ServerAdmin [bob@example.com]
-        DocumentRoot /var/www/totpcgi
-        ServerName totp.example.com
-        ErrorLog /var/log/httpd/totpcgi-error.log
-        CustomLog /var/log/httpd/totpcgi-access.log common
-        SuexecUserGroup totpcgi totpcgi
-        AddHandler fcgid-script .fcgi
-        DirectoryIndex index.fcgi
-
-        SSLEngine on
-        SSLCertificateFile /etc/pki/tls/certs/totp-server.crt
-        SSLCertificateKeyFile /etc/pki/tls/private/totp-server.key
-        SSLCACertificateFile /etc/pki/tls/certs/totpcgi-ca.crt
-
-        SSLVerifyClient require
-        SSLVerifyDepth 10
-
-        CustomLog /var/log/httpd/totpcgi-ssl-request-log \
-                  "%t %h %{SSL_PROTOCOL}x %{SSL_CIPHER}x \"%r\" %b"
-
-        <Directory "/var/www/totpcgi">
-                Options ExecCGI
-        </Directory>
-
-    </VirtualHost>
+Create the config file in /etc/httpd/conf.d/totpcgi.conf using the
+vhost-totpcgi.conf template provided in contrib directory, and modify it
+accordingly to use FCGI instead of CGI.
 
 .. note::
 
@@ -166,7 +122,7 @@ tarball. Copy them over to the server and run::
 Provision some secrets
 ~~~~~~~~~~~~~~~~~~~~~~
 Totp-cgi uses the same file format for TOTP secrets as files generated
-by google-authenticator. To provision a secret, do::
+by google-authenticator. To manually provision a secret, do::
 
     yum install google-authenticator
 
@@ -189,6 +145,9 @@ Follow the prompts. This will create a file in your
 
 Repeat this for as many users as you have. You can use puppet to
 provision these files with relative ease.
+
+If you want to use the web-based provisioning tool, see Provisioning_
+below.
 
 Set up the clients
 ~~~~~~~~~~~~~~~~~~
@@ -221,7 +180,7 @@ following command, replacing [username] and [token] with valid entries::
 
     curl --cert /etc/pki/totpcgi.pem \
          --data 'user=[username];token=[token];mode=PAM_SM_AUTH' \
-         https://totp.example.com
+         https://totp.example.com:8443/
 
 If all worked well, you should see::
 
@@ -234,46 +193,16 @@ If all worked well, you should see::
 
 Configure pam_url on the clients
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-.. warning::
-
-    At the time of writing, pam_url requires a patch to work right:
-    http://skvidal.fedorapeople.org/patches/pam_url_ssl_client_auth.patch
-
-    This patch should be merged in the nearest future.
-
 Install pam_url and create a configuration file in /etc/pam_url.conf as
-follows::
+provided in the contrib directory.
 
-    # pam_url configuration file
-
-    pam_url:
-    {
-        settings:
-        {
-            uri = "https://totp.example.com/";    # URI to fetch 
-            returncode = "OK";                    # Expected return on success
-            userfield = "user";                   # userfield name to send 
-            passwdfield = "token";                # passwdfield name to send
-            extradata = "&do=login";              # extradata to send
-            prompt = "Google-Authenticator: "     # prompt string
-        };
-
-        ssl:
-        {
-            verify_peer = true;                   # Verify SSL validity
-            verify_host = true;                   # Verify SSL/CN
-            client_cert = "/etc/pki/totpcgi.pem"; # Client SSL certificate
-            client_key  = "/etc/pki/totpcgi.pem"; # Client SSL key
-        };
-    };
-
-    # END
-   
 Now you need to add it to your pam configuration. Let's change it so
 users can sudo with their Google-Authenticator token. Edit
 /etc/pam.d/sudo and add this line above all other auth lines::
 
     auth sufficient pam_url.so config=/etc/pam_url.conf
+
+Alternatively, see other pam examples in the contrib directory.
 
 
 Using pincodes
@@ -445,3 +374,70 @@ usersname).
 Configuring LDAP is way beyond this document, so I leave this task up to
 you. If you've never done it before but would like to try, I suggest you
 look at FreeIPA (in RHEL6.2 and above as "ipa-server").
+
+Provisioning
+------------
+Starting with version 0.5, we include full support for provisioning
+tokens. You can use the provisioning.cgi that ships with the project, or
+you can use it as an example implementation in order to incorporate
+provisioning support into your existing web infrastructure.
+
+.. note::
+
+    Provisioning requires that pincodes are used, otherwise there is no
+    way to authenticate the user that logs in to obtain the token.
+    Alternatively, use pincode support as a sort of "temporary
+    provisioning password."
+
+Start by installing the CGI and configuration files::
+
+    mkdir -p -m 0551 /var/www/totpcgi-provisioning
+    cp -a cgi/provisioning.cgi /var/www/totpcgi-provisioning/index.cgi
+    cp -a cgi/*.css /var/www/totpcgi-provisioning/
+    chmod 0550 /var/www/totpcgi/index.cgi
+
+To only allow the provisioning.cgi to modify .totp files, we will need
+to set up provisioning.cgi to run as a separate user from totp.cgi.
+Let's start by creating that user::
+
+    useradd -M -s/sbin/nologin -d/var/lib/totpcgi totpcgiprov
+
+Now we'll need to adjust the ownership on directories::
+
+    chown totpcgiprov:totpcgi /etc/totpcgi
+    chown -R totpcgiprov:totpcgi /etc/totpcgi/totp
+    chown -R totpcgiprov:totpcgiprov /var/www/totpcgi-provisioning
+
+Configuring Apache is going to be a bit tricky. To run these two CGIs as
+two different users, we'll need to create two separate VirtualHost
+entries, but this becomes tricky with SSL:
+
+1. These two VirtualHosts must have different hostnames and run on separate 
+   IPs, in which case:
+
+    1. You must use a wildcard certificate that is correct for both
+       hostnames
+    2. You must use a certificate with a host alias that is correct for both
+       hostnames
+
+2. These two VirtualHosts can run on the same IP, but listen on different
+   ports
+
+The default configuration uses the 2nd scenario -- we run totp.cgi on
+port 8443, since it's not a user-visible address, and the provisioning cgi 
+on the standard SSL port 443. It is entirely up to you how you make it
+work in your environment.
+
+To use the default scenario, copy the vhost-totpcgi-provisioning.conf from
+the contrib directory into /etc/httpd/conf.d/totpcgi-provisioning.conf
+and edit accordingly to use the right hostname and SSL certificates.
+
+Restart httpd, and see if everything is working right.
+
+.. note::
+
+    If provisioning.cgi finds an existing token, it will refuse to issue
+    a new one. To re-issue a token to someone, first delete the existing
+    token either by deleting the file from totp directory, or by using
+    the "rmsecret.py" script provided in the contrib directory.
+

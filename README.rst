@@ -32,16 +32,19 @@ FEATURES
    Postgresql for load-balanced setups.
 5. Supports encrypting the Google-Authenticator master secret with the
    user's pincode.
+6. Supports web-based provisioning to generate Google-Authenticator
+   compatible files (or database entries).
 
 REQUIREMENTS
 ------------
 1. pyotp_
-2. google-authenticator_ to generate the .totp files
+2. google-authenticator_ to generate the .totp files by hand
 3. flup_ (for .fcgi only)
 4. psycopg2_ (for postgresql backend support)
 5. py-bcrypt_ (for pincode support using bcrypt)
 6. pycrypto_ and passlib_ (for encrypted-secret support)
-7. pam_url_ 
+7. pam_url_ (for PAM support)
+8. python-qrcode_ (for provisioning support)
 
 .. _pyotp: https://github.com/nathforge/pyotp
 .. _google-authenticator: https://code.google.com/p/google-authenticator/
@@ -50,6 +53,7 @@ REQUIREMENTS
 .. _py-bcrypt: https://code.google.com/p/py-bcrypt/
 .. _pycrypto: https://www.dlitz.net/software/pycrypto/
 .. _passlib: https://code.google.com/p/passlib/
+.. _python-qrcode: https://github.com/lincolnloop/python-qrcode
 
 AUTHORS
 -------

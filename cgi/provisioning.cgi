@@ -59,15 +59,15 @@ except totpcgi.backends.BackendNotSupported, ex:
 syslog.openlog('provisioning.cgi', syslog.LOG_PID, syslog.LOG_AUTH)
 
 def bad_request(config, why):
-    templates_dir = config.get('main', 'templates_dir')
+    templates_dir = config.get('secret', 'templates_dir')
     fh = open(os.path.join(templates_dir, 'error.html'))
     tpt = Template(fh.read())
     fh.close()
 
     vals = {
-            'action_url':   config.get('main', 'action_url'),
-            'css_root':     config.get('main', 'css_root'),
-            'errormsg':     why
+            'action_url':   config.get('secret', 'action_url'),
+            'css_root':     config.get('secret', 'css_root'),
+            'errormsg':     cgi.escape(why)
     }
 
     out = tpt.safe_substitute(vals)
@@ -106,14 +106,14 @@ def show_qr_code(data):
     sys.exit(0)
 
 def show_login_form(config):
-    templates_dir = config.get('main', 'templates_dir')
+    templates_dir = config.get('secret', 'templates_dir')
     fh = open(os.path.join(templates_dir, 'login.html'))
     tpt = Template(fh.read())
     fh.close()
 
     vals = {
-            'action_url':   config.get('main', 'action_url'),
-            'css_root':     config.get('main', 'css_root')
+            'action_url':   config.get('secret', 'action_url'),
+            'css_root':     config.get('secret', 'css_root')
     }
 
     out = tpt.safe_substitute(vals)
@@ -128,15 +128,15 @@ def show_login_form(config):
 
 def show_totp_page(config, user, gaus):
     # generate provisioning URI
-    tpt = Template(config.get('main', 'totp_user_mask'))
+    tpt = Template(config.get('secret', 'totp_user_mask'))
     totp_user = tpt.safe_substitute(username=user)
     totp_qr_uri = gaus.totp.provisioning_uri(totp_user)
 
-    action_url = config.get('main', 'action_url')
+    action_url = config.get('secret', 'action_url')
     
     qrcode_embed = '<img src="%s?qrcode=%s"/>' % (action_url, totp_qr_uri)
 
-    templates_dir = config.get('main', 'templates_dir')
+    templates_dir = config.get('secret', 'templates_dir')
     fh = open(os.path.join(templates_dir, 'totp.html'))
     tpt = Template(fh.read())
     fh.close()
@@ -148,7 +148,7 @@ def show_totp_page(config, user, gaus):
 
     vals = {
             'action_url':     action_url,
-            'css_root':       config.get('main', 'css_root'),
+            'css_root':       config.get('secret', 'css_root'),
             'qrcode_embed':   qrcode_embed,
             'scratch_tokens': scratch_tokens
     }
@@ -164,13 +164,13 @@ def show_totp_page(config, user, gaus):
     sys.exit(0)
 
 def generate_secret(config):
-    encrypt_secret = config.getboolean('main', 'encrypt_secret')
-    window_size = config.getint('main', 'window_size')
-    rate_limit = config.get('main', 'rate_limit')
+    encrypt_secret = config.getboolean('secret', 'encrypt_secret')
+    window_size = config.getint('secret', 'window_size')
+    rate_limit = config.get('secret', 'rate_limit')
 
     # scratch tokens don't make any sense with encrypted secret
     if not encrypt_secret:
-        scratch_tokens_n = config.getint('main', 'scratch_tokens_n')
+        scratch_tokens_n = config.getint('secret', 'scratch_tokens_n')
     else:
         scratch_tokens_n = 0
 
@@ -237,14 +237,14 @@ def cgimain():
     gaus = generate_secret(config)
 
     # if we don't need to encrypt the secret, set pincode to None
-    encrypt_secret = config.getboolean('main', 'encrypt_secret')
+    encrypt_secret = config.getboolean('secret', 'encrypt_secret')
     if not encrypt_secret:
         pincode = None
 
     backends.secret_backend.save_user_secret(user, gaus, pincode)
     # purge all old state, as it's now obsolete
 
-    backends.state_backend._remove_user_state(user)
+    backends.state_backend.delete_user_state(user)
 
     show_totp_page(config, user, gaus)
 

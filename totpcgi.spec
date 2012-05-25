@@ -80,6 +80,7 @@ rm -rf %{buildroot}
 %{__python} setup.py install -O1 --skip-build --root %{buildroot}
 
 # Install config files
+mkdir -p -m 0750  %{buildroot}%{_sysconfdir}/totpcgi
 mkdir -p -m 0750 \
     %{buildroot}%{_sysconfdir}/totpcgi/totp \
     %{buildroot}%{_sysconfdir}/totpcgi/templates
@@ -99,7 +100,7 @@ install -m 0550 cgi/totp.cgi \
     %{buildroot}%{_localstatedir}/www/totpcgi/index.cgi
 install -m 0550 cgi/provisioning.cgi \
     %{buildroot}%{_localstatedir}/www/totpcgi-provisioning/index.cgi
-install -m 0644 cgi/provisioning.css \
+install -m 0644 cgi/*.css \
     %{buildroot}%{_localstatedir}/www/totpcgi-provisioning/
 
 # Install the httpd config files
@@ -108,6 +109,12 @@ install -m 0644 contrib/vhost-totpcgi.conf \
     %{buildroot}%{_sysconfdir}/httpd/conf.d/totpcgi.conf
 install -m 0644 contrib/vhost-totpcgi-provisioning.conf \
     %{buildroot}%{_sysconfdir}/httpd/conf.d/totpcgi-provisioning.conf
+
+# Install totpprov script and manpage
+mkdir -p -m 0755 %{buildroot}%{_bindir}
+install -m 0755 contrib/totpprov.py %{buildroot}%{_bindir}/totpprov
+mkdir -p -m 0755 %{buildroot}%{_mandir}
+install -m 0644 contrib/totpprov.5 %{buildroot}%{_mandir}/5/
 
 # Install SELinux files
 for selinuxvariant in %{selinux_variants}
@@ -160,14 +167,16 @@ fi
 %files -n python-totpcgi
 %doc COPYING
 %{python_sitelib}/*
-
-%files provisioning
 %dir %attr(-, %{totpcgiprovuser}, %{totpcgiuser}) %{_sysconfdir}/totpcgi
 %dir %attr(-, %{totpcgiprovuser}, %{totpcgiuser}) %{_sysconfdir}/totpcgi/totp
+%config(noreplace) %attr(-, -, %{totpcgiprovuser}) %{_sysconfdir}/totpcgi/provisioning.conf
+%{_bindir}/*
+%{_mandir}/*/*
+
+%files provisioning
 %dir %attr(-, %{totpcgiprovuser}, %{totpcgiprovuser}) %{_localstatedir}/www/totpcgi-provisioning
 %attr(-, %{totpcgiprovuser}, %{totpcgiprovuser}) %{_localstatedir}/www/totpcgi-provisioning/*.cgi
 %config(noreplace) %{_localstatedir}/www/totpcgi-provisioning/*.css
-%config(noreplace) %attr(-, -, %{totpcgiprovuser}) %{_sysconfdir}/totpcgi/provisioning.conf
 %config(noreplace) %{_sysconfdir}/httpd/conf.d/totpcgi-provisioning.conf
 %dir %attr(-, -, %{totpcgiprovuser}) %{_sysconfdir}/totpcgi/templates
 %config(noreplace) %attr(-, -, %{totpcgiprovuser}) %{_sysconfdir}/totpcgi/templates/*.html

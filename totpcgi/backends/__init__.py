@@ -101,7 +101,7 @@ class GAStateBackend:
     def update_user_state(self, user, state):
         pass
 
-    def _remove_user_state(self, user):
+    def delete_user_state(self, user):
         pass
 
 class GASecretBackend:
@@ -124,7 +124,7 @@ class GAPincodeBackend:
     def verify_user_pincode(self, user, pincode):
         pass
 
-    def save_user_hashcode(self, user, pincode):
+    def save_user_hashcode(self, user, pincode, makedb=True):
         pass
 
     def delete_user_hashcode(self, user):
