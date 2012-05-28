@@ -122,32 +122,49 @@ tarball. Copy them over to the server and run::
 Provision some secrets
 ~~~~~~~~~~~~~~~~~~~~~~
 Totpcgi uses the same file format for TOTP secrets as files generated
-by google-authenticator. To manually provision a secret, do::
-
-    yum install google-authenticator
-
-Follow the prompts. This will create a file in your
-~/.google-authenticator. Copy it into place for use with totpcgi::
+by google-authenticator, so if you already have some secrets generated
+with google-authenticator, just copy them into place::
 
     cp ~/.google-authenticator /etc/totpcgi/totp/[username].totp
     chgrp totpcgi /etc/totpcgi/totp/[username].totp
     chmod 0440 /etc/totpcgi/totp/[username].totp
 
-.. warning::
+Alternatively, use the totpprov utility from the contrib/ directory. To
+install and use it, do the following::
 
-    The program will also produce a link which you can copy and paste
-    into your browser to see a QR image that you can snap with your
-    phone in order to import the secret into your phone app. If you are
-    going to go that route, make sure you use your browser's no-cache
-    mode ("Private Browsing" or "Incognito Mode") to prevent the secret
-    from being saved in your browser's history. You can also install
-    "qrencode" to have the QR code generated in the terminal.
+    cp conf/provisioning.conf /etc/totpcgi/
 
-Repeat this for as many users as you have. You can use puppet to
-provision these files with relative ease.
+Edit the provisioning.conf file and change the "totp_user_mask" value to
+reflect your environment. After that, you should be able to run the
+following command to provision a user::
 
-If you want to use the web-based provisioning tool, see Provisioning_
-below.
+    [root@totphost totpcgi]# totpprov generate-user-token wakka
+    Generating new token for user wakka
+    Are you sure [y/N]: y
+    New token generated for user wakka
+    otpauth://totp/wakka@example.com?secret=EBJVHOQTYVYIVMUG
+    Scratch tokens:
+    23374296
+    25160754
+    86583002
+    93195170
+    32611388
+
+You can pass this information to clients. To generate a QR code, you can
+install "qrencode" and run the following command with the otpauth:// URL
+returned by the totpprov command::
+
+    qrencode -s 5 -o totp-qrcode.png otpauth://totp/[...]
+
+The "totpprov" utility doesn't set the token file ownership
+automatically, so the last thing you will need to do is set the
+ownership on the .totp file correctly::
+
+    chown root:totpcgi /etc/totpcgi/totp/wakka.totp
+    chmod 0640 /etc/totpcgi/totp/wakka.totp
+    
+See "man totpprov" for more information on this utility, and don't
+forget to check out `Provisioning CGI`_ chapter.
 
 Set up the clients
 ~~~~~~~~~~~~~~~~~~
@@ -347,10 +364,10 @@ rules on the server allow incoming postgresql traffic.
 
 .. note::
 
-    You can also use postgresql for your secrets and pincodes backend,
-    though documentation for that remains to be written. For now, you
-    can use the totpcgi.psql file to figure out the database schema --
-    where things go should be pretty obvious.
+    You can also use postgresql for your secrets and pincodes backend.
+    If you use "totpprov" or provisioning.cgi, it will read the
+    configuration from /etc/totpcgi/provisioning.conf and know where to
+    put the provisioned information.
 
 LDAP backend
 ~~~~~~~~~~~~
@@ -375,8 +392,8 @@ Configuring LDAP is way beyond this document, so I leave this task up to
 you. If you've never done it before but would like to try, I suggest you
 look at FreeIPA (in RHEL6.2 and above as "ipa-server").
 
-Provisioning
-------------
+Provisioning CGI
+----------------
 Starting with version 0.5, we include full support for provisioning
 tokens. You can use the provisioning.cgi that ships with the project for
 user-initiated provisioning, or you can use it as an example
@@ -385,8 +402,8 @@ existing web infrastructure.
 
 .. note::
 
-    Provisioning requires that pincodes are used, otherwise there is no
-    way to authenticate the user that logs in to obtain the token.
+    Provisioning CGI requires that pincodes are used, otherwise there is
+    no way to authenticate the user that logs in to obtain the token.
     Alternatively, use pincode support as a sort of "temporary
     provisioning password."
 
@@ -409,9 +426,9 @@ Now we'll need to adjust the ownership on directories::
     chown -R totpcgiprov:totpcgi /etc/totpcgi/totp
     chown -R totpcgiprov:totpcgiprov /var/www/totpcgi-provisioning
 
-Configuring Apache is going to be a bit tricky. To run these two CGIs as
-two different users, we'll need to create two separate VirtualHost
-entries, but this becomes tricky with SSL:
+Configuring Apache is going to be less straightforward. To run these two
+CGIs as two different users, we'll need to create two separate
+VirtualHost entries, but this becomes tricky with SSL:
 
 1. These two VirtualHosts must have different hostnames and run on separate 
    IPs, in which case:
@@ -426,7 +443,7 @@ entries, but this becomes tricky with SSL:
 
 The default configuration uses the 2nd scenario -- we run totp.cgi on
 port 8443, since it's not a user-visible address, and the provisioning cgi 
-on the standard SSL port 443. It is entirely up to you how you make it
+on the standard https port 443. It is entirely up to you how you make it
 work in your environment.
 
 To use the default scenario, copy the vhost-totpcgi-provisioning.conf from
@@ -442,3 +459,11 @@ Restart httpd, and see if everything is working right.
     token either by deleting the file from totp directory, or by using
     the "totpprov" utility provided in the contrib directory.
 
+Using with web services
+-----------------------
+The only way to use totpcgi with web services is via mod_auth_pam or
+mod_authnz_auth -- either directly on the Apache host, or via a SSO
+solution, such as CAS, Webauth or Pubcookie.
+
+If someone feels like contributing a native module for any of these
+services, that initiative will be welcomed. :)

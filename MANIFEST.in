@@ -1,10 +1,7 @@
 include COPYING
-include README.rst
-include INSTALL.rst
-include totp.cgi
-include totp.fcgi
-include totpcgi.psql
-include totpcgi.conf
+include *.rst
+include cgi/*
+include conf/*
 include selinux/*
 include python-totpcgi.spec
 include test*
