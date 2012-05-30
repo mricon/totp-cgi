@@ -1,8 +1,8 @@
 include COPYING
 include *.rst
 include cgi/*
-include conf/*
+recursive-include conf *
 include selinux/*
-include python-totpcgi.spec
+include totpcgi.spec
 include test*
-include contrib/*
+recursive-include contrib *
