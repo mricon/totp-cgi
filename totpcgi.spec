@@ -7,9 +7,11 @@
 %define totpcgiuser     totpcgi
 %define totpcgiprovuser totpcgiprov
 
+%define fixfiles_dirs %{_localstatedir}/www/totpcgi %{_localstatedir}/www/totpcgi-provisioning %{_localstatedir}/lib/totpcgi %{_sysconfdir}/totpcgi
+
 Name:		totpcgi
 Version:	0.5.0
-Release:	1%{?dist}
+Release:	2%{?dist}
 Summary:	A centralized totp solution based on google-authenticator
 
 License:	GPLv2+
@@ -140,7 +142,7 @@ do
   /usr/sbin/semodule -s ${selinuxvariant} -i \
     %{_datadir}/selinux/${selinuxvariant}/totpcgi.pp &> /dev/null || :
 done
-/sbin/fixfiles -R totpcgi restore || :
+/sbin/fixfiles restore %{fixfiles_dirs} || :
 
 %postun selinux
 if [ $1 -eq 0 ] ; then
@@ -148,7 +150,7 @@ if [ $1 -eq 0 ] ; then
   do
     /usr/sbin/semodule -s ${selinuxvariant} -r totpcgi &> /dev/null || :
   done
-  /sbin/fixfiles -R totpcgi restore || :
+  /sbin/fixfiles restore %{fixfiles_dirs} || :
 fi
 
 
@@ -186,6 +188,9 @@ fi
 
 
 %changelog
+* Wed May 30 2012 Konstantin Ryabitsev <mricon@kernel.org> - 0.5.0-2
+- Use a manual fixfiles list, as we have more than one package
+
 * Thu May 24 2012 Konstantin Ryabitsev <mricon@kernel.org> - 0.5.0-1
 - Split into more packages: totpcgi, python-totpcgi, totpcgi-provisioning, totpcgi-selinux
 
