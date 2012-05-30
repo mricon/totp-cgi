@@ -11,7 +11,7 @@
 
 Name:		totpcgi
 Version:	0.5.0
-Release:	2%{?dist}
+Release:	3%{?dist}
 Summary:	A centralized totp solution based on google-authenticator
 
 License:	GPLv2+
@@ -52,14 +52,13 @@ used by totpcgi.
 
 %package selinux
 Summary:    SELinux policies for totpcgi
-Requires:   %{name} = %{version}-%{release}
+Requires:   python-%{name} = %{version}-%{release}
 Requires:   selinux-policy >= %{selinux_policyver}
 Requires(post):   /usr/sbin/semodule, /sbin/restorecon, /sbin/fixfiles
 Requires(postun): /usr/sbin/semodule, /sbin/restorecon, /sbin/fixfiles
 
 %description selinux
 This package includes SELinux policy for totpcgi and totpcgi-provisioning.
-
 
 %prep
 %setup -q
@@ -135,6 +134,19 @@ done
 /usr/sbin/useradd -c "Totpcgi provisioning user" \
 	-M -s /sbin/nologin -d /etc/totpcgi %{totpcgiprovuser} 2> /dev/null || :
 
+# For some reason the labeling doesn't always happen correctly
+# force it if fixfiles exists
+%post
+if [ -f /sbin/fixfiles ] ; then
+  /sbin/fixfiles -R totpcgi restore || :
+fi
+
+# For some reason the labeling doesn't always happen correctly
+# force it if fixfiles exists
+%post provisioning
+if [ -f /sbin/fixfiles ] ; then
+  /sbin/fixfiles -R totpcgi-provisioning restore || :
+fi
 
 %post selinux
 for selinuxvariant in %{selinux_variants}
@@ -188,6 +200,10 @@ fi
 
 
 %changelog
+* Wed May 30 2012 Andrew Grimberg <agrimberg@linuxfoundation.org> - 0.5.0-2
+- Reorder the package dependencies slightly
+- Add in post scripts for totpcgi & totpcgi-provisioning for SE labeling
+
 * Wed May 30 2012 Konstantin Ryabitsev <mricon@kernel.org> - 0.5.0-2
 - Use a manual fixfiles list, as we have more than one package
 
