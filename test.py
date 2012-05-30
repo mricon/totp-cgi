@@ -156,7 +156,7 @@ class GATest(unittest.TestCase):
                 'User did not match')
         self.assertEqual(secret.rate_limit, (4, 30),
                 'RATE_LIMIT did not parse correctly')
-        self.assertEqual(secret.window_size, 17,
+        self.assertEqual(secret.window_size, 3,
                 'WINDOW_SIZE did not parse correctly')
 
         compare_tokens = []
@@ -219,10 +219,23 @@ class GATest(unittest.TestCase):
         secret = backends.secret_backend.get_user_secret(gau.user)
         totp = pyotp.TOTP(secret.totp.secret)
 
-        # get some tokens from +/- 60 seconds
-        past_token = totp.at(int(time.time())-60)
-        future_token = totp.at(int(time.time())+60)
+        # go back until we get the previous token
+        timestamp = int(time.time())
+        token = totp.at(timestamp)
+
+        past_token = future_token = None
+        past_timestamp = future_timestamp = timestamp
+
+        while past_token is None or past_token == token:
+            past_timestamp -= 10
+            past_token = totp.at(past_timestamp)
+
+        while future_token is None or future_token == token:
+            future_timestamp += 10
+            future_token = totp.at(future_timestamp)
+
         logger.debug('past_token=%s' % past_token)
+        logger.debug('token=%s' % token)
         logger.debug('future_token=%s' % future_token)
 
         # this should work

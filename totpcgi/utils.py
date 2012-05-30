@@ -58,7 +58,7 @@ def hash_pincode(pincode, algo='bcrypt'):
     return passlib.hash.bcrypt.encrypt(pincode)
 
 
-def generate_secret(rate_limit=(3,30), window_size=17, scratch_tokens=5):
+def generate_secret(rate_limit=(3,30), window_size=3, scratch_tokens=5):
     good_chars = base64._b32alphabet.values()
 
     secret = ''

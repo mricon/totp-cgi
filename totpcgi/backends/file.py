@@ -98,7 +98,7 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
                     hashcode = db[user]
                     db.close()
 
-                logger.debug('%s not in .db. Falling back to plaintext.')
+                logger.debug('%s not in .db. Falling back to plaintext.' % user)
             else:
                 logger.debug('.db is stale! Falling back to plaintext.')
 

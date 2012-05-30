@@ -182,9 +182,12 @@ class GAUser:
                         if secret.window_size > 0:
                             # okay, let's try within the window_size
                             start = secret.timestamp-(secret.window_size*10)
-                            end   = secret.timestamp+(secret.window_size*10)
+                            end   = secret.timestamp+(secret.window_size*10)+1
+                            logger.debug('start=%s, end=%s' % (start, end))
                             for timestamp in xrange(start, end, 10):
                                 at_token = secret.get_token_at(timestamp)
+                                logger.debug('timestamp=%s, at_token=%s' %
+                                        (timestamp, at_token))
                                 if at_token == token:
                                     used_timestamp = timestamp
                                     used_token = token
