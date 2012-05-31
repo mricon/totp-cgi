@@ -426,6 +426,12 @@ Now we'll need to adjust the ownership on directories::
     chown -R totpcgiprov:totpcgi /etc/totpcgi/totp
     chown -R totpcgiprov:totpcgiprov /var/www/totpcgi-provisioning
 
+Now copy conf/templates into /etc/totpcgi/templates. You want to edit
+the .html files in the templates directory to your liking, unless you
+work for Example Company, LTD. Review the settings in
+/etc/totpcgi/provisioning.conf as well, to make sure the defaults are
+sane.
+
 Configuring Apache is going to be less straightforward. To run these two
 CGIs as two different users, we'll need to create two separate
 VirtualHost entries, but this becomes tricky with SSL:
