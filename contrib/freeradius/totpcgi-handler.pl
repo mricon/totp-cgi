@@ -38,6 +38,7 @@ use Net::LDAP;
 use Net::LDAP::Util qw(escape_filter_value);
 use LWP::UserAgent;
 use YAML::Syck;
+use String::Escape qw(unbackslash);
 
 $YAML::Syck::ImplicitTyping = 1;
 
@@ -129,7 +130,7 @@ sub authenticate {
 	my %form = (
 		'mode'  => 'PAM_SM_AUTH',
 		'user'  => $RAD_REQUEST{'User-Name'},
-		'token' => $RAD_REQUEST{'User-Password'},
+		'token' => unbackslash($RAD_REQUEST{'User-Password'}),
 	);
 
 	my $response = $ua->post($$config{'totpurl'}, \%form);
