@@ -11,12 +11,21 @@ Net::LDAP::Util
 LWP::UserAgent
 YAML::Syck
 
-Expectations of this script are that you have loaded in the FreeRADIUS
-LDAP schema extensions into your schema. Upon a successful validation of
-the user against totp-cgi the script will then poll LDAP for the user.
-The user object must have an objectClass of radiusprofile attached to it
-and at least dialupAccess set to TRUE (NOTE the check is case insensitive
-and the schema created it as a string instead of boolean).
+The script is aware of it's calling name. If you have a need for
+creating multiple vservers in FreeRADIUS and want different filters /
+checks for your perl module then all you need to do is symlink this
+script and create a correspondingly named yaml file to load the
+configuration from.
+
+Users will be validated provided they pass an LDAP user search filter.
+It is recommended that you have loaded in the FreeRADIUS LDAP scheme
+extensions and use the extra attributes in your filter (see example
+config file).
+
+If a groupSearchBase & groupSearch are defined in the configuration file
+then the user must be a member of at least 1 of the groups listed in the
+filter. NOTE: separate group filters are combined using the | filter
+function.
 
 There is a limited number of attributes that are presently mapped back
 out of LDAP as we do not use the rlm_ldap attributes file. To extend the

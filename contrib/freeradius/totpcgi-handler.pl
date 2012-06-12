@@ -39,17 +39,21 @@ use Net::LDAP::Util qw(escape_filter_value);
 use LWP::UserAgent;
 use YAML::Syck;
 use String::Escape qw(unbackslash);
+use File::Basename;
+#use Data::Dumper;
 
 $YAML::Syck::ImplicitTyping = 1;
 
+# get our script name
+my $BASE = fileparse($0, '.pl');
+
 # Load in our configuration options
-my $config = LoadFile('/etc/raddb/totpcgi-handler.yaml');
+my $config = LoadFile("/etc/raddb/$BASE.yaml");
 
 # We only read some of the radius attributes. If you need more
 # update this array and %attrib_map
 my @attrs = [
 	'uid',			# to verify we're getting info on the correct user
-	'dialupAccess',		# required - string value set to TRUE is required for access
 	'radiusGroupName',	# optional - RADIUS Group-Name to apply to access
 	'radiusFilterId',	# optional - RADIUS Filter name to apply to access
 	'radiusFramedIPAddress',# optional - static IP assignment
@@ -117,6 +121,201 @@ sub authorize {
 	return RLM_MODULE_OK;
 }
 
+#
+sub check_ldap_attributes
+{
+	# default to rejecting (with no message)
+	my $retcode = RLM_MODULE_REJECT;
+	my $dn;
+
+	# successfully authenticated with password & token
+	# check for VPN information
+	# keep our timeout short so that we failover fairly fast
+	# we need to do this to make sure our RADIUS checks
+	# happen in a fast enough manner
+	my $ldap = Net::LDAP->new($$config{'ldaphosts'}, timeout => 10);
+	if ($ldap)
+	{
+		my $mesg;
+
+		if ($$config{'bindDN'} && $$config{'bindPassword'})
+		{
+			$mesg = $ldap->bind($$config{'bindDN'}, password => $$config{'bindPassword'});
+		}
+		else
+		{
+			$mesg = $ldap->bind();
+		}
+
+		if ($mesg->code)
+		{
+			$RAD_REPLY{'Reply-Message'} = 'Unable to bind to LDAP server';
+		}
+		else
+		{
+			# The search filter should have a USERNAME string in it for replacement
+			# with the uid we're searching for
+			my $my_filter = $$config{'search'};
+			my $escaped_user = escape_filter_value($RAD_REQUEST{'User-Name'});
+			$my_filter =~ s/USERNAME/$escaped_user/;
+
+			$mesg = $ldap->search(
+				base	=> $$config{'userSearchBase'},
+				filter	=> $my_filter,
+				scope	=> $$config{'searchScope'},
+				attrs	=> @attrs
+				);
+
+			# We check $mesg->entry(0) only as we should only be getting
+			# back one entry
+			if ($mesg->count() && $mesg->entry(0)->attributes() &&
+				($mesg->entry(0)->get_value('uid') == $RAD_REQUEST{'User-Name'}))
+			{
+				my $entry = $mesg->entry(0);
+
+				foreach my $attrib ($entry->attributes())
+				{
+					if ($attrib_map{$attrib})
+					{
+						$RAD_REPLY{$attrib_map{$attrib}} = $entry->get_value($attrib);
+					}
+				}
+				$retcode = RLM_MODULE_OK;
+				$dn = $entry->dn;
+			}
+			else
+			{
+				$RAD_REPLY{'Reply-Message'} = 'Denied access by rlm_perl: account does not pass LDAP user filter';
+			}
+			# clean-up our connection
+			$ldap->unbind;
+		}
+	}
+	else
+	{
+		# Our LDAP servers have gone away, we can't
+		# get informationon the user, reject them
+		$RAD_REPLY{'Reply-Message'} = 'Denied access by rlm_perl: LDAP server(s) have gone away';
+	}
+
+#	return $retcode;
+	my $rethash = {'retcode' => $retcode, 'dn' => $dn};
+	return $rethash;
+}
+
+# Check account against LDAP groups
+sub check_ldap_groups($)
+{
+	# grab the DN of the account to check (if needed)
+	my ($dn) = @_;
+
+	my @groups;
+	if (ref($$config{'groupSearch'}) eq 'ARRAY')
+	{
+		@groups = @{$$config{'groupSearch'}};
+	}
+	else
+	{
+		@groups = $$config{'groupSearch'};
+	}
+
+	# default to rejecting (with no message)
+	my $retcode = RLM_MODULE_REJECT;
+
+	my $userattrib = escape_filter_value($RAD_REQUEST{'User-Name'});
+
+	if ($$config{'groupAttributeIsDN'})
+	{
+		$userattrib = $dn;
+	}
+
+	my $ldap = Net::LDAP->new($$config{'ldaphosts'}, timeout => 10);
+	if ($ldap)
+	{
+		my $mesg;
+
+		if ($$config{'bindDN'} && $$config{'bindPassword'})
+		{
+			$mesg = $ldap->bind($$config{'bindDN'}, password => $$config{'bindPassword'});
+		}
+		else
+		{
+			$mesg = $ldap->bind();
+		}
+
+		if ($mesg->code)
+		{
+			$RAD_REPLY{'Reply-Message'} = 'Unable to bind to LDAP server';
+		}
+		else
+		{
+			my $groupfilter;
+
+			# build up our group filter to be a logical or of all
+			# the groups defined
+			if ($#groups > 0)
+			{
+				$groupfilter = '(|';
+				foreach my $group (@groups)
+				{
+					$groupfilter .= $group;
+				}
+				$groupfilter .= ')';
+			}
+			else
+			{
+				$groupfilter = $groups[0];
+			}
+
+			$mesg = $ldap->search(
+				base	=> $$config{'groupSearchBase'},
+				filter	=> $groupfilter,
+				scope	=> $$config{'searchScope'},
+				attrs	=> $$config{'groupAttribute'},
+				);
+
+			# if our first hit doesn't have attributes we've got a problem
+			if ($mesg->count() && $mesg->entry(0)->attributes())
+			{
+				# loop through the entries to see if the account is
+				# in them
+				foreach my $entry ($mesg->entries())
+				{
+					foreach my $user ($entry->get_value($$config{'groupAttribute'}))
+					{
+						if ($user eq $userattrib)
+						{
+							# Found the user in a group
+							$retcode = RLM_MODULE_OK;
+							last;
+						}
+					}
+					if ($retcode == RLM_MODULE_OK)
+					{
+						last;
+					}
+				}
+			}
+
+			# clean-up our LDAP connection
+			$ldap->unbind;
+
+			if ($retcode != RLM_MODULE_OK)
+			{
+				$RAD_REPLY{'Reply-Message'} = 'Denied access by rlm_perl: account does not pass LDAP group filter(s)';
+			}
+		}
+	}
+	else
+	{
+		# Our LDAP servers have gone away, we can't
+		# get information on the user, reject them
+		$RAD_REPLY{'Reply-Message'} = 'Denied access by rlm_perl: LDAP server(s) have gone away';
+	}
+
+	return $retcode;
+}
+
 # Function to handle authenticate
 sub authenticate {
 	# For debugging purposes only
@@ -136,64 +335,17 @@ sub authenticate {
 	my $response = $ua->post($$config{'totpurl'}, \%form);
 
 	if ($response->is_success) {
-		# successfully authenticated with password & token
-		# check for VPN information
-		# keep our timeout short so that we failover fairly fast
-		# we need to do this to make sure our RADIUS checks
-		# happen in a fast enough manner
-		my $ldap = Net::LDAP->new($$config{'ldaphosts'}, timeout => 10);
-		if ($ldap)
+		# we get back a hash as we also want the DN if the user passed
+		my $rethash = &check_ldap_attributes;
+		$retcode = $$rethash{'retcode'};
+
+		# check account against groups (if defined)
+		if ($retcode == RLM_MODULE_OK)
 		{
-			my $mesg = $ldap->bind($$config{'binddn'}, password => $$config{'bindpwd'});
-
-			# The search filter should have a USERNAME string in it for replacement
-			# with the uid we're searching for
-			my $my_filter = $$config{'search'};
-			my $escaped_user = escape_filter_value($RAD_REQUEST{'User-Name'});
-			$my_filter =~ s/USERNAME/$escaped_user/;
-
-			$mesg = $ldap->search(
-				base	=> $$config{'searchbase'},
-				filter	=> $my_filter,
-				scope	=> $$config{'searchscope'},
-				attrs	=> @attrs
-				);
-
-			# We check $mesg->entry(0) only as we should only be getting
-			# back one entry
-			if ($mesg->count() && $mesg->entry(0)->attributes() &&
-				($mesg->entry(0)->get_value('uid') == $RAD_REQUEST{'User-Name'}))
+			if ($$config{'groupSearchBase'} && $$config{'groupSearch'})
 			{
-				my $entry = $mesg->entry(0);
-
-				if ($entry->exists('dialupAccess') && (uc($entry->get_value('dialupAccess')) eq 'TRUE'))
-				{
-					foreach my $attrib ($entry->attributes())
-					{
-						if ($attrib_map{$attrib})
-						{
-							$RAD_REPLY{$attrib_map{$attrib}} = $entry->get_value($attrib);
-						}
-					}
-					$retcode = RLM_MODULE_OK;
-				}
-				else
-				{
-					$RAD_REPLY{'Reply-Message'} = 'Denied access by rlm_perl: dialupAccess not TRUE';
-				}
+				$retcode = &check_ldap_groups($$rethash{'dn'});
 			}
-			else
-			{
-				$RAD_REPLY{'Reply-Message'} = 'Denied access by rlm_perl: no LDAP RADIUS attributes found';
-			}
-			# clean-up our connection
-			$ldap->unbind;
-		}
-		else
-		{
-			# Our LDAP servers have gone away, we can't
-			# get informationon the user, reject them
-			$RAD_REPLY{'Reply-Message'} = 'Denied access by rlm_perl: LDAP server(s) have gone away';
 		}
 	} else {
 		$RAD_REPLY{'Reply-Message'} = 'Denied access by rlm_perl authenticate function';

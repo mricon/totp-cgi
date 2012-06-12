@@ -1,11 +1,24 @@
 # LDAP Binding information
-binddn     : 'uid=searchuser,cn=users,cn=accounts,dc=example,dc=com'
-bindpwd    : 'searchUIDpwd'
-searchbase : 'cn=users,cn=accounts,dc=example,dc=com'
-searchscope: 'sub'
+bindDN          : 'uid=searchuser,cn=users,cn=accounts,dc=example,dc=com'
+bindPassword    : 'searchUIDpwd'
+searchbase      : 'cn=users,cn=accounts,dc=example,dc=com'
+groupSearchBase : 'cn=groups,cn=accounts,dc=example.dc=com'
+groupAttribute  : 'member'
+groupAttributeIsDN : true
+searchScope     : 'sub'
 
 # USERNAME is replaced with the uid that is passed in
 search     : '(&(uid=USERNAME)(objectClass=radiusprofile))'
+
+# groupSearch may be a singleton or array
+groupSearch :
+ - '(&(cn=VPNUsers)(objectClass=groupOfNames))'
+ - '(&(cn=ExampleGroup)(objectClass=groupOfNames))'
+
+# the above will programmatically create the following filter:
+# (|(&(cn=VPNUsers)(objectClass=groupOfNames))(&(cn=ExampleGroup)(objectClass=groupOfNames)))
+
+# Therefore the user only needs to be a member of either VPNUsers or ExampleGroup
 
 ldaphosts  :
  - 'ldaps://ipa1.example.com'
