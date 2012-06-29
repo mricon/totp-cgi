@@ -404,8 +404,8 @@ existing web infrastructure.
 
     Provisioning CGI requires that pincodes are used, otherwise there is
     no way to authenticate the user that logs in to obtain the token.
-    Alternatively, use pincode support as a sort of "temporary
-    provisioning password."
+    Alternatively, use trust_http_auth option and authenticate users on
+    the apache level.
 
 Start by installing the CGI and configuration files::
 

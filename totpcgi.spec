@@ -10,8 +10,8 @@
 %define fixfiles_dirs %{_localstatedir}/www/totpcgi %{_localstatedir}/www/totpcgi-provisioning %{_localstatedir}/lib/totpcgi %{_sysconfdir}/totpcgi
 
 Name:		totpcgi
-Version:	0.5.0
-Release:	3%{?dist}
+Version:	0.5.1
+Release:	1%{?dist}
 Summary:	A centralized totp solution based on google-authenticator
 
 License:	GPLv2+
@@ -200,6 +200,9 @@ fi
 
 
 %changelog
+* Fri Jun 29 2012 Konstantin Ryabitsev <mricon@kernel.org> - 0.5.1-1
+- Release 0.5.1 with trust_http_auth functionality.
+
 * Wed May 30 2012 Andrew Grimberg <agrimberg@linuxfoundation.org> - 0.5.0-2
 - Reorder the package dependencies slightly
 - Add in post scripts for totpcgi & totpcgi-provisioning for SE labeling

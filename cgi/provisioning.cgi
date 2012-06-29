@@ -193,32 +193,44 @@ def cgimain():
         qrcode = form.getfirst('qrcode')
         show_qr_code(qrcode)
 
-    must_keys = ('username', 'pincode')
-
-    for must_key in must_keys:
-        if must_key not in form:
-            show_login_form(config)
-
-    user    = form.getfirst('username')
-    pincode = form.getfirst('pincode')
-
     remote_host = os.environ['REMOTE_ADDR']
 
-    # start by verifying the pincode
     try:
-        backends.pincode_backend.verify_user_pincode(user, pincode)
-    except Exception, ex:
-        syslog.syslog(syslog.LOG_NOTICE,
-            'Failure: user=%s, host=%s, message=%s' % (user, remote_host, 
-                str(ex)))
-        bad_request(config, str(ex))
+        trust_http_auth = config.getboolean('secret', 'trust_http_auth')
+    except ConfigParser.NoOptionError:
+        trust_http_auth = False
 
-    syslog.syslog(syslog.LOG_NOTICE, 
-        'Success: user=%s, host=%s' % (user, remote_host)) 
+    if trust_http_auth and os.environ.has_key('REMOTE_USER'):
+        user    = os.environ['REMOTE_USER']
+        pincode = None
+        
+        syslog.syslog(syslog.LOG_NOTICE, 
+            'Success (http-auth): user=%s, host=%s' % (user, remote_host)) 
 
-    # pincode verified
+    else:
+        must_keys = ('username', 'pincode')
+
+        for must_key in must_keys:
+            if must_key not in form:
+                show_login_form(config)
+
+        user    = form.getfirst('username')
+        pincode = form.getfirst('pincode')
+
+        # start by verifying the pincode
+        try:
+            backends.pincode_backend.verify_user_pincode(user, pincode)
+        except Exception, ex:
+            syslog.syslog(syslog.LOG_NOTICE,
+                'Failure: user=%s, host=%s, message=%s' % (user, remote_host, 
+                    str(ex)))
+            bad_request(config, str(ex))
+
+        # pincode verified
+        syslog.syslog(syslog.LOG_NOTICE, 
+            'Success: user=%s, host=%s' % (user, remote_host)) 
+
     # is there an existing secret for this user?
-
     exists = True
 
     try:
