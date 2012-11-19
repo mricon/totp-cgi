@@ -10,7 +10,7 @@
 %define fixfiles_dirs %{_localstatedir}/www/totpcgi %{_localstatedir}/www/totpcgi-provisioning %{_localstatedir}/lib/totpcgi %{_sysconfdir}/totpcgi
 
 Name:		totpcgi
-Version:	0.5.1
+Version:	0.5.2
 Release:	1%{?dist}
 Summary:	A centralized totp solution based on google-authenticator
 
@@ -200,6 +200,10 @@ fi
 
 
 %changelog
+* Mon Nov 19 2012 Konstantin Ryabitsev <mricon@kernel.org> - 0.5.2-1
+- Release 0.5.2 with a fix for a potential replay attack in case the
+  pincode was submitted with a typo (issue #12)
+
 * Fri Jun 29 2012 Konstantin Ryabitsev <mricon@kernel.org> - 0.5.1-1
 - Release 0.5.1 with trust_http_auth functionality.
 
