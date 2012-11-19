@@ -304,11 +304,12 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
                 state.success_timestamps  = js['success_timestamps']
                 state.used_scratch_tokens = js['used_scratch_tokens']
 
-            except:
+            except Exception, ex:
                 # We fail out of caution, though if someone wanted to 
                 # screw things up, they could have done so without making
                 # the file un-parseable by json -- all they need to do is to
                 # erase the file.
+                logger.debug('Parsing json failed with: %s' % ex)
                 logger.debug('Unlocking state file for user %s' % user)
                 flock(fh, LOCK_UN)
                 raise totpcgi.UserStateError(
@@ -317,7 +318,11 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
             fh.seek(0)
         else:
             logger.debug('%s does not exist, opening w' % state_file)
-            fh = open(state_file, 'w')
+            try:
+                fh = open(state_file, 'w')
+            except IOError:
+                raise totpcgi.UserStateError(
+                        'Cannot write user state for %s, exiting.' % user)
             logger.debug('Locking state file for user %s' % user)
             flock(fh, LOCK_EX)
 

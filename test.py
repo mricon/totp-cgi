@@ -316,6 +316,15 @@ class GATest(unittest.TestCase):
         with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'Not a valid token'):
             gau.verify_token(token)
 
+        logger.debug('Test right away with a valid token')
+        backends = getBackends()
+        secret = backends.secret_backend.get_user_secret(gau.user)
+
+        totp = pyotp.TOTP(secret.totp.secret)
+        validtoken = totp.now()
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'been used once'):
+            gau.verify_token(validtoken)
+
         logger.debug('Testing with a token that is too long')
         with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'too long'):
             cleanState()
@@ -352,8 +361,7 @@ class GATest(unittest.TestCase):
             gau.verify_token(VALID_SCRATCH_TOKENS[0])
 
     def testTotpCGI(self):
-        # Very basic test -- it should return 'user does not exist'
-        # as we cannot currently set SECRETS_DIR in the cgi on the fly
+        # Very basic test -- it should return 'user not found'
         os.environ['REMOTE_ADDR'] = '127.0.0.1'
         os.environ['QUERY_STRING'] = 'user=bupkis&token=555555&mode=PAM_SM_AUTH'
         os.environ['PYTHONPATH'] = '.'
@@ -393,6 +401,8 @@ class GATest(unittest.TestCase):
             with self.assertRaisesRegexp(totpcgi.UserPincodeError,
                 'Pincode did not match'):
                 ga.verify_user_token('valid', token)
+
+            cleanState()
 
             logger.debug('Testing with fallback to pincodes')
             pincode_db_file = pincode_file + '.db'
@@ -512,6 +522,11 @@ class GATest(unittest.TestCase):
         logger.debug('Testing with valid token but invalid pincode')
         with self.assertRaisesRegexp(totpcgi.UserPincodeError, raisedmsg):
             ga.verify_user_token(valid_user, 'blarg'+tokencode)
+
+        logger.debug('Testing again with valid token and valid pincode')
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed,
+                'already been used'):
+            ga.verify_user_token(valid_user, token)
 
         cleanState()
 

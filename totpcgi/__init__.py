@@ -103,9 +103,18 @@ class GAUser:
         return self.backends.pincode_backend.verify_user_pincode(self.user, pincode)
 
     def verify_token(self, token, pincode=None):
-        secret = self.backends.secret_backend.get_user_secret(self.user, pincode)
-        state  = self.backends.state_backend.get_user_state(self.user)
-        
+
+        try:
+            secret = self.backends.secret_backend.get_user_secret(self.user, pincode)
+        except UserSecretError, ex:
+            logger.debug('Failed to obtain user secret: %s' % ex)
+            logger.debug('Marking failed timestamp and returning failure')
+            state = self.backends.state_backend.get_user_state(self.user)
+            state.fail_timestamps.append(int(time.time()))
+            self.backends.state_backend.update_user_state(self.user, state)
+            raise ex
+
+        state     = self.backends.state_backend.get_user_state(self.user)
         new_state = GAUserState()
 
         used_tokens = []
@@ -126,8 +135,6 @@ class GAUser:
 
         new_state.used_scratch_tokens = state.used_scratch_tokens
 
-        logger.debug('used_tokens=%s' % used_tokens)
-
         # are you being rate-limited right now?
         for timestamp in state.fail_timestamps:
             # trim any timestamps that are too old to consider
@@ -135,11 +142,18 @@ class GAUser:
             if timestamp < cutoff:
                 continue
 
+            at_token = secret.get_token_at(timestamp)
+
+            if at_token not in used_tokens:
+                used_tokens.append(at_token)
+
             new_state.fail_timestamps.append(timestamp)
+
+        logger.debug('used_tokens=%s' % used_tokens)
 
         used_timestamp = secret.timestamp
         used_token     = secret.token
-            
+
         if len(new_state.fail_timestamps) >= secret.rate_limit[0]:
             success = (False, 'Rate-limit reached, please try again later')
 
@@ -265,6 +279,18 @@ class GoogleAuthenticator:
         pincode   = token[:-8]
         tokencode = token[-8:]
 
-        user.verify_pincode(pincode)
+        try:
+            user.verify_pincode(pincode)
+        except UserPincodeError, ex:
+            # Run it anyway to record the timestamp as used
+            try:
+                user.verify_token(tokencode, pincode)
+            except VerifyFailed, vfex:
+                # We expect it to fail here, but this is not the error code
+                # we want to return to the app.
+                pass
+
+            raise ex
+
         return user.verify_token(tokencode, pincode)
 
