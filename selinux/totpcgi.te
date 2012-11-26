@@ -40,6 +40,10 @@ logging_send_syslog_msg(httpd_totpcgi_provisioning_script_t)
 
 # needed by totp.fcgi
 allow httpd_totpcgi_script_t httpd_t:unix_stream_socket { ioctl accept getattr shutdown read write };
+# Not sure what triggers this, but it's not needed
+files_dontaudit_list_tmp(httpd_totpcgi_script_t)
+files_dontaudit_list_tmp(httpd_totpcgi_provisioning_script_t)
+
 # This should be upstream, really.
 allow httpd_suexec_t httpd_t:unix_stream_socket { read write };
 #
