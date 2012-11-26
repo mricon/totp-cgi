@@ -11,7 +11,7 @@
 
 Name:		totpcgi
 Version:	0.5.2
-Release:	1%{?dist}
+Release:	2%{?dist}
 Summary:	A centralized totp solution based on google-authenticator
 
 License:	GPLv2+
@@ -127,7 +127,7 @@ done
 /usr/sbin/hardlink -cv %{buildroot}%{_datadir}/selinux
 
 
-%pre
+%pre -n python-totpcgi
 # We always add both the totpcgi and totpcgi-provisioning user
 /usr/sbin/useradd -c "Totpcgi user" \
 	-M -s /sbin/nologin -d /var/lib/totpcgi %{totpcgiuser} 2> /dev/null || :
@@ -200,6 +200,9 @@ fi
 
 
 %changelog
+* Mon Nov 26 2012 Andrew Grimberg <agrimberg@linuxfoundation.org> - 0.5.2-2
+- Move the user adds for totpcgi & totpcgiprov to python-totpcgi package
+
 * Mon Nov 19 2012 Konstantin Ryabitsev <mricon@kernel.org> - 0.5.2-1
 - Release 0.5.2 with a fix for a potential replay attack in case the
   pincode was submitted with a typo (issue #12)
