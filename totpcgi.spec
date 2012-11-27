@@ -10,8 +10,8 @@
 %define fixfiles_dirs %{_localstatedir}/www/totpcgi %{_localstatedir}/www/totpcgi-provisioning %{_localstatedir}/lib/totpcgi %{_sysconfdir}/totpcgi
 
 Name:		totpcgi
-Version:	0.5.2
-Release:	2%{?dist}
+Version:	0.5.3
+Release:	1%{?dist}
 Summary:	A centralized totp solution based on google-authenticator
 
 License:	GPLv2+
@@ -200,6 +200,9 @@ fi
 
 
 %changelog
+* Tue Nov 26 2012 Konstantin Ryabitsev <mricon@kernel.org> - 0.5.3-1
+- Release 0.5.3 with minor fixes.
+
 * Mon Nov 26 2012 Andrew Grimberg <agrimberg@linuxfoundation.org> - 0.5.2-2
 - Move the user adds for totpcgi & totpcgiprov to python-totpcgi package
 
