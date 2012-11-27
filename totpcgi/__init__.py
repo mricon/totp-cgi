@@ -110,7 +110,11 @@ class GAUser:
             logger.debug('Failed to obtain user secret: %s' % ex)
             logger.debug('Marking failed timestamp and returning failure')
             state = self.backends.state_backend.get_user_state(self.user)
-            state.fail_timestamps.append(int(time.time()))
+            # Since we were not able to obtain the secret object, we bluntly
+            # invalidate the past 10 timestamps
+            now = int(time.time())
+            for timestamp in xrange(now, now-300, -30):
+                state.fail_timestamps.append(timestamp)
             self.backends.state_backend.update_user_state(self.user, state)
             raise ex
 
@@ -213,7 +217,9 @@ class GAUser:
             if success[0] == True:
                 new_state.success_timestamps.append(used_timestamp)
             else:
-                new_state.fail_timestamps.append(used_timestamp)
+                # Add all timestamps that are within the back-window
+                for ts in xrange(used_timestamp, used_timestamp-(secret.window_size*10), -30):
+                    new_state.fail_timestamps.append(ts)
 
         self.backends.state_backend.update_user_state(self.user, new_state)
 
