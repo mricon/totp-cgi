@@ -1,29 +1,29 @@
-%{!?python_sitelib: %global python_sitelib %(%{__python} -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())")}
+%{!?python_sitelib: %define python_sitelib %(%{__python} -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())")}
 
-%global selinux_policyver %(%{__sed} -e 's,.*selinux-policy-\\([^/]*\\)/.*,\\1,' /usr/share/selinux/devel/policyhelp || echo 0.0.0)
+%define selinux_policyver %(%{__sed} -e 's,.*selinux-policy-\\([^/]*\\)/.*,\\1,' /usr/share/selinux/devel/policyhelp || echo 0.0.0)
 
-%global selinux_variants mls strict targeted
+%define selinux_variants mls strict targeted
 
 %define totpcgiuser     totpcgi
 %define totpcgiprovuser totpcgiprov
 
 %define fixfiles_dirs %{_localstatedir}/www/totpcgi %{_localstatedir}/www/totpcgi-provisioning %{_localstatedir}/lib/totpcgi %{_sysconfdir}/totpcgi
 
-Name:		totpcgi
-Version:	0.5.3
-Release:	1%{?dist}
-Summary:	A centralized totp solution based on google-authenticator
+Name:       totpcgi
+Version:    0.5.3
+Release:    2%{?dist}
+Summary:    A centralized totp solution based on google-authenticator
 
-License:	GPLv2+
-URL:		https://github.com/mricon/totp-cgi
-Source0:	%{name}-%{version}.tar.gz
+License:    GPLv2+
+URL:        https://github.com/mricon/totp-cgi
+Source0:    %{name}-%{version}.tar.gz
 
-BuildArch:	noarch
+BuildArch:  noarch
 
-BuildRequires: checkpolicy, selinux-policy-devel, hardlink
+BuildRequires: checkpolicy, selinux-policy-devel, hardlink, python2-devel
 BuildRequires: /usr/share/selinux/devel/policyhelp
 
-Requires:	httpd, mod_ssl
+Requires:   httpd, mod_ssl
 Requires:   python-totpcgi = %{version}-%{release}
 
 
@@ -130,9 +130,9 @@ done
 %pre -n python-totpcgi
 # We always add both the totpcgi and totpcgi-provisioning user
 /usr/sbin/useradd -c "Totpcgi user" \
-	-M -s /sbin/nologin -d /var/lib/totpcgi %{totpcgiuser} 2> /dev/null || :
+    -M -s /sbin/nologin -d /var/lib/totpcgi %{totpcgiuser} 2> /dev/null || :
 /usr/sbin/useradd -c "Totpcgi provisioning user" \
-	-M -s /sbin/nologin -d /etc/totpcgi %{totpcgiprovuser} 2> /dev/null || :
+    -M -s /sbin/nologin -d /etc/totpcgi %{totpcgiprovuser} 2> /dev/null || :
 
 # For some reason the labeling doesn't always happen correctly
 # force it if fixfiles exists
@@ -200,7 +200,10 @@ fi
 
 
 %changelog
-* Tue Nov 26 2012 Konstantin Ryabitsev <mricon@kernel.org> - 0.5.3-1
+* Wed Nov 28 2012 Konstantin Ryabitsev <mricon@kernel.org> - 0.5.3-2
+- Minor fixes for fedora-review (RHBZ #880863)
+
+* Tue Nov 27 2012 Konstantin Ryabitsev <mricon@kernel.org> - 0.5.3-1
 - Release 0.5.3 with minor fixes.
 
 * Mon Nov 26 2012 Andrew Grimberg <agrimberg@linuxfoundation.org> - 0.5.2-2
