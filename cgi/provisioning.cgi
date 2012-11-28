@@ -184,10 +184,15 @@ def generate_secret(config):
     
 
 def cgimain():
+    try:
+        trust_http_auth = config.getboolean('secret', 'trust_http_auth')
+    except ConfigParser.NoOptionError:
+        trust_http_auth = False
+
     form = cgi.FieldStorage()
 
     if 'qrcode' in form:
-        if os.environ['HTTP_REFERER'].find(os.environ['SERVER_NAME']) == -1:
+        if not trust_http_auth and os.environ['HTTP_REFERER'].find(os.environ['SERVER_NAME']) == -1:
             bad_request(config, 'Sorry, you failed the HTTP_REFERER check')
 
         qrcode = form.getfirst('qrcode')
@@ -195,15 +200,10 @@ def cgimain():
 
     remote_host = os.environ['REMOTE_ADDR']
 
-    try:
-        trust_http_auth = config.getboolean('secret', 'trust_http_auth')
-    except ConfigParser.NoOptionError:
-        trust_http_auth = False
-
     if trust_http_auth and os.environ.has_key('REMOTE_USER'):
         user    = os.environ['REMOTE_USER']
         pincode = None
-        
+
         syslog.syslog(syslog.LOG_NOTICE, 
             'Success (http-auth): user=%s, host=%s' % (user, remote_host)) 
 
