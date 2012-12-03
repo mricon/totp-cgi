@@ -10,8 +10,8 @@
 %define fixfiles_dirs %{_localstatedir}/www/totpcgi %{_localstatedir}/www/totpcgi-provisioning %{_localstatedir}/lib/totpcgi %{_sysconfdir}/totpcgi
 
 Name:       totpcgi
-Version:    0.5.3
-Release:    2%{?dist}
+Version:    0.5.4
+Release:    1%{?dist}
 Summary:    A centralized totp solution based on google-authenticator
 
 License:    GPLv2+
@@ -200,6 +200,10 @@ fi
 
 
 %changelog
+* Mon Dec 03 2012 Konstantin Ryabitsev <mricon@kernel.org> - 0.5.4-1
+- Make sure provisioning pages are not cached.
+- Minor documentation fixes.
+
 * Wed Nov 28 2012 Konstantin Ryabitsev <mricon@kernel.org> - 0.5.3-2
 - Minor fixes for fedora-review (RHBZ #880863)
 

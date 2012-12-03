@@ -5,10 +5,10 @@ A centralized totp solution based on google-authenticator
 ---------------------------------------------------------
 
 :Author:    mricon@kernel.org
-:Date:      2012-11-19
+:Date:      2012-12-03
 :Copyright: Konstantin Ryabitsev and contributors
 :License:   GPLv2+
-:Version:   0.5.3
+:Version:   0.5.4
 
 DECRIPTION
 ----------
@@ -45,6 +45,8 @@ REQUIREMENTS
 6. pycrypto_ and passlib_ (for encrypted-secret support)
 7. pam_url_ (for PAM support)
 8. python-qrcode_ (for provisioning support)
+
+All of these dependencies are in EPEL for RHEL 6.
 
 .. _pyotp: https://github.com/nathforge/pyotp
 .. _google-authenticator: https://code.google.com/p/google-authenticator/
