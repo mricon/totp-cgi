@@ -100,6 +100,9 @@ def show_qr_code(data):
     sys.stdout.write('Status: 200 OK\n')
     sys.stdout.write('Content-type: image/png\n')
     sys.stdout.write('Content-Length: %s\n' % len(out))
+    sys.stdout.write('Cache-Control: no-cache\n')
+    sys.stdout.write('Pragma: no-cache\n')
+    sys.stdout.write('Expires: -1\n')
     sys.stdout.write('\n')
 
     sys.stdout.write(out)
@@ -158,6 +161,9 @@ def show_totp_page(config, user, gaus):
     sys.stdout.write('Status: 200 OK\n')
     sys.stdout.write('Content-type: text/html\n')
     sys.stdout.write('Content-Length: %s\n' % len(out))
+    sys.stdout.write('Cache-Control: no-cache\n')
+    sys.stdout.write('Pragma: no-cache\n')
+    sys.stdout.write('Expires: -1\n')
     sys.stdout.write('\n')
 
     sys.stdout.write(out)
