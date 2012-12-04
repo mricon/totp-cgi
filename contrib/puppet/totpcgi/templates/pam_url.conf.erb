@@ -1,0 +1,25 @@
+# pam_url configuration file
+
+pam_url:
+{
+  settings:
+  {
+    url         = "https://totp.example.com:8443/";
+    returncode  = "OK";
+    userfield   = "user";
+    passwdfield = "token";
+    extradata   = "&do=login";
+    prompt      = "Google Authenticator Token: ";
+  };
+
+  ssl:
+  {
+    verify_peer = true;
+    verify_host = true;
+    client_cert = "/var/lib/puppet/ssl/certs/<%= @fqdn %>.pem";
+    client_key  = "/var/lib/puppet/ssl/private_keys/<%= @fqdn %>.pem";
+    ca_cert     = "/var/lib/puppet/ssl/certs/ca.pem";
+  };
+};
+
+# END

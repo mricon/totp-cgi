@@ -1,0 +1,35 @@
+Listen 8443
+<VirtualHost _default_:8443>
+    ServerAdmin admin@example.com
+    DocumentRoot /var/www/totpcgi
+    ServerName totp.example.com:8443
+    ErrorLog /var/log/httpd/totpcgi-error.log
+    SuexecUserGroup totpcgi totpcgi
+
+    # Use this for totp.cgi
+    AddHandler cgi-script .cgi
+    DirectoryIndex index.cgi
+
+    # Or use this for totp.fcgi:
+    #AddHandler fcgid-script .fcgi
+    #DirectoryIndex index.fcgi
+
+    SSLEngine on
+    SSLProtocol all -SSLv2
+    SSLHonorCipherOrder On
+    SSLCipherSuite RC4-SHA:HIGH:!MD5:!aNULL:!EDH
+
+    SSLCertificateFile    /var/lib/puppet/ssl/certs/<%= @fqdn %>.pem
+    SSLCertificateKeyFile /var/lib/puppet/ssl/private_keys/<%= @fqdn %>.pem
+    SSLCACertificateFile  /var/lib/puppet/ssl/certs/ca.pem
+
+    SSLVerifyClient require
+    SSLVerifyDepth 10
+
+    CustomLog /var/log/httpd/totpcgi-ssl-request-log \
+        "%t %h %{SSL_PROTOCOL}x %{SSL_CIPHER}x \"%r\" %b"
+
+    <Directory "/var/www/totpcgi">
+        Options ExecCGI
+    </Directory>
+</VirtualHost>

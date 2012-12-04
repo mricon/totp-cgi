@@ -1,0 +1,11 @@
+#%PAM-1.0
+auth       required     pam_env.so
+auth       requisite    pam_unix.so
+auth       sufficient   pam_url.so config=/etc/pam_url.conf
+auth       requisite    pam_succeed_if.so uid >= 500 quiet
+auth       required     pam_deny.so
+
+account    include      system-auth
+password   include      system-auth
+session    optional     pam_keyinit.so revoke
+session    required     pam_limits.so
