@@ -26,7 +26,7 @@ Listen 8443
     SSLVerifyClient require
     SSLVerifyDepth 10
 
-    CustomLog /var/log/httpd/totpcgi-ssl-request-log \
+    CustomLog /var/log/httpd/totpcgi-ssl-request.log \
         "%t %h %{SSL_PROTOCOL}x %{SSL_CIPHER}x \"%r\" %b"
 
     <Directory "/var/www/totpcgi">
