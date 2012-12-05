@@ -57,6 +57,11 @@ Make sure the .key files are owned and readable by root only.
 
     You can just use them directly in the httpd config file.
 
+.. hint::
+    
+    If you already have puppet-managed infrastructure, check out the
+    puppet module and the quickstart doc in contrib/puppet!
+
 Next, you'll need to install one of the CGIs.
 
 Install Regular CGI

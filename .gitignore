@@ -2,6 +2,7 @@
 *.pyc
 *.pyo
 *.json
+*.pdf
 test.log
 build/*
 dist/*

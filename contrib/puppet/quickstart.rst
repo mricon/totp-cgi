@@ -59,9 +59,9 @@ services.
     generates 2048-bit keys! Puppet versions prior to 2.7 use 1024-bit
     keys by default, which is lamentably low. If you're using
     puppet-2.6, you will need to enroll the totpcgi server with puppet
-    using --keylength=2048 argument. E.g.:
+    using --keylength=2048 argument. E.g.::
 
-    puppet agent --server=puppet.example.com --keylength=2048 [etc]
+        puppet agent --server=puppet.example.com --keylength=2048 [etc]
 
 Add the module to puppet
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -160,6 +160,17 @@ Troubleshooting
 
    Examine the output of /var/log/secure for any clues as to why it's
    not working.
+7. We have gone to great lengths to make sure that all components work
+   with SELinux in enforcing mode, but it's possible that SELinux is
+   causing problems. Examine the output of ausearch to see if that's
+   the case::
+
+       ausearch -ts recent -m avc
+
+   If you suspect SELinux to be the culprit, you can put the domain in
+   question into permissive mode via::
+
+       semanage permissive -a httpd_totpcgi_script_t
 
 Support
 ~~~~~~~
