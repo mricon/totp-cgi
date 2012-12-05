@@ -17,7 +17,13 @@ class totpcgi::server {
   }
 
   package { 'mod_authnz_external':
-    ensure => present,
+    ensure  => present,
+    require => Package['mod_ssl'],
+  }
+
+  selboolean { 'allow_httpd_mod_auth_pam':
+    value   => 'on',
+    require => Package['mod_authnz_external'],
   }
 
   package { ['totpcgi', 'totpcgi-selinux', 'totpcgi-provisioning']:
