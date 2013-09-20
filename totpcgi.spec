@@ -148,8 +148,10 @@ if [ -f /sbin/fixfiles ] ; then
   /sbin/fixfiles -R totpcgi-provisioning restore || :
 fi
 # make sure /var/lib/totpcgi is 0770 totpcgiprov:totpcgi
-chown %{totpcgiprovuser}:%{totpcgiuser} %{_localstatedir}/lib/totpcgi || :
+chown -R %{totpcgiprovuser}:%{totpcgiuser} %{_localstatedir}/lib/totpcgi || :
 chmod 0770 %{_localstatedir}/lib/totpcgi || :
+# make sure state files are accessible to provisioning
+chmod 0660 %{_localstatedir}/lib/totpcgi/*.json >/dev/null 2>&1 || :
 
 
 %post selinux
