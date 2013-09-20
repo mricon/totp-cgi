@@ -52,7 +52,7 @@ backends = totpcgi.backends.Backends()
 try:
     backends.load_from_config(config)
 except totpcgi.backends.BackendNotSupported, ex:
-    syslog.syslog(syslog.LOG_CRIT, 
+    syslog.syslog(syslog.LOG_CRIT,
             'Backend engine not supported: %s' % ex)
     sys.exit(1)
 
@@ -128,6 +128,29 @@ def show_login_form(config):
 
     sys.stdout.write(out)
     sys.exit(0)
+
+def show_reissue_page(config, user):
+    templates_dir = config.get('secret', 'templates_dir')
+    fh = open(os.path.join(templates_dir, 'reissue.html'))
+    tpt = Template(fh.read())
+    fh.close()
+
+    vals = {
+            'action_url':   config.get('secret', 'action_url'),
+            'css_root':     config.get('secret', 'css_root'),
+            'username':     user,
+    }
+
+    out = tpt.safe_substitute(vals)
+    
+    sys.stdout.write('Status: 200 OK\n')
+    sys.stdout.write('Content-type: text/html\n')
+    sys.stdout.write('Content-Length: %s\n' % len(out))
+    sys.stdout.write('\n')
+
+    sys.stdout.write(out)
+    sys.exit(0)
+
 
 def show_totp_page(config, user, gaus):
     # generate provisioning URI
@@ -207,11 +230,14 @@ def cgimain():
     remote_host = os.environ['REMOTE_ADDR']
 
     if trust_http_auth and os.environ.has_key('REMOTE_USER'):
-        user    = os.environ['REMOTE_USER']
-        pincode = None
+        user = os.environ['REMOTE_USER']
+        if 'pincode' not in form:
+            pincode = None
+        else:
+            pincode = form.getfirst('pincode')
 
-        syslog.syslog(syslog.LOG_NOTICE, 
-            'Success (http-auth): user=%s, host=%s' % (user, remote_host)) 
+        syslog.syslog(syslog.LOG_NOTICE,
+            'Using trust-http-auth for user=%s, host=%s' % (user, remote_host))
 
     else:
         must_keys = ('username', 'pincode')
@@ -223,35 +249,62 @@ def cgimain():
         user    = form.getfirst('username')
         pincode = form.getfirst('pincode')
 
-        # start by verifying the pincode
+    # start by verifying the pincode
+    if pincode is not None:
         try:
             backends.pincode_backend.verify_user_pincode(user, pincode)
         except Exception, ex:
             syslog.syslog(syslog.LOG_NOTICE,
-                'Failure: user=%s, host=%s, message=%s' % (user, remote_host, 
+                'Failure: user=%s, host=%s, message=%s' % (user, remote_host,
                     str(ex)))
             bad_request(config, str(ex))
 
         # pincode verified
-        syslog.syslog(syslog.LOG_NOTICE, 
+        syslog.syslog(syslog.LOG_NOTICE,
             'Success: user=%s, host=%s' % (user, remote_host)) 
+
+    if 'action' in form:
+        action = form.getfirst('action')
+    else:
+        action = 'issue'
 
     # is there an existing secret for this user?
     exists = True
 
     try:
         backends.secret_backend.get_user_secret(user, pincode)
-    except totpcgi.UserNotFound:
+    except totpcgi.UserNotFound, ex:
         # if we got it, then there isn't an existing secret in place
         exists = False
+    except totpcgi.UserSecretError, ex:
+        bad_request(config, 'Existing secret could not be processed: %s' % ex)
 
-    if exists:
+    if exists and action != 'reissue':
         syslog.syslog(syslog.LOG_NOTICE,
             'Secret exists: user=%s, host=%s' % (user, remote_host))
-        bad_request(config, 'Existing secret found. It must be removed first.')
+        show_reissue_page(config, user)
+
+    if action == 'reissue':
+        # verify token first
+        tokencode = form.getfirst('tokencode')
+        gau = totpcgi.GAUser(user, backends)
+
+        try:
+            status = gau.verify_token(tokencode, pincode)
+        except Exception, ex:
+            syslog.syslog(syslog.LOG_NOTICE,
+                'Token verify failed: user=%s, host=%s, message=%s' % (user,
+                    remote_host, str(ex)))
+            bad_request(config, 'Token verification failed: %s' % str(ex))
+
+        # delete existing token
+        try:
+            backends.secret_backend.delete_user_secret(user)
+        except Exception, ex:
+            bad_request(config, 'Could not delete existing token for %s: %s'
+                    % (user, str(ex)))
 
     # now generate the secret and store it
-    
     gaus = generate_secret(config)
 
     # if we don't need to encrypt the secret, set pincode to None
@@ -260,9 +313,11 @@ def cgimain():
         pincode = None
 
     backends.secret_backend.save_user_secret(user, gaus, pincode)
-    # purge all old state, as it's now obsolete
 
-    backends.state_backend.delete_user_state(user)
+    # save new state
+    backends.state_backend.get_user_state(user)
+    state = totpcgi.GAUserState()
+    backends.state_backend.update_user_state(user, state)
 
     show_totp_page(config, user, gaus)
 

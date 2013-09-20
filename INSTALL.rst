@@ -426,6 +426,9 @@ Let's start by creating that user::
 Now we'll need to adjust the ownership on directories::
 
     chown totpcgiprov:totpcgi /etc/totpcgi
+    chown totpcgiprov:totpcgi /var/lib/totpcgi
+    chmod 0770 /var/lib/totpcgi
+    chmod 0666 /var/lib/totpcgi/*.json
     chown -R totpcgiprov:totpcgi /etc/totpcgi/totp
     chown -R totpcgiprov:totpcgiprov /var/www/totpcgi-provisioning
 
@@ -460,13 +463,6 @@ the contrib directory into /etc/httpd/conf.d/totpcgi-provisioning.conf
 and edit accordingly to use the right hostname and SSL certificates.
 
 Restart httpd, and see if everything is working right.
-
-.. note::
-
-    If provisioning.cgi finds an existing token, it will refuse to issue
-    a new one. To re-issue a token to someone, first delete the existing
-    token either by deleting the file from totp directory, or by using
-    the "totpprov" utility provided in the contrib directory.
 
 Using with web services
 -----------------------
