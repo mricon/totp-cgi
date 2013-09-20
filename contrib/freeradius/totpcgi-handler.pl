@@ -53,7 +53,6 @@ my $config = LoadFile("/etc/raddb/$BASE.yaml");
 # We only read some of the radius attributes. If you need more
 # update this array and %attrib_map
 my @attrs = [
-	'uid',			# to verify we're getting info on the correct user
 	'radiusGroupName',	# optional - RADIUS Group-Name to apply to access
 	'radiusFilterId',	# optional - RADIUS Filter name to apply to access
 	'radiusFramedIPAddress',# optional - static IP assignment
@@ -62,6 +61,9 @@ my @attrs = [
 	'radiusServiceType',	# optional - access control parameter (for Cisco CLI access)
 	'radiusSessionTimeout'	# optional - session timeout in seconds
 	];
+
+# add in the user attribute defined in our configuration
+unshift(@attrs, $$config{'userAttribute'});
 
 # Map the LDAP attributes to RADIUS AV pair attributes
 # We only support some of the options, if you need to map more
@@ -169,7 +171,7 @@ sub check_ldap_attributes
 			# We check $mesg->entry(0) only as we should only be getting
 			# back one entry
 			if ($mesg->count() && $mesg->entry(0)->attributes() &&
-				($mesg->entry(0)->get_value('uid') == $RAD_REQUEST{'User-Name'}))
+				($mesg->entry(0)->get_value($$config{'userAttribute'}) == $RAD_REQUEST{'User-Name'}))
 			{
 				my $entry = $mesg->entry(0);
 
@@ -348,7 +350,7 @@ sub authenticate {
 			}
 		}
 	} else {
-		$RAD_REPLY{'Reply-Message'} = 'Denied access by rlm_perl authenticate function';
+		$RAD_REPLY{'Reply-Message'} = 'Denied access by rlm_perl authenticate function. ERROR: ' . $response->status_line;
 	}
 
 	# Make sure a REJECT has some sort of message

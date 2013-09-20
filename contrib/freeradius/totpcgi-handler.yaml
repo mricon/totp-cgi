@@ -1,7 +1,8 @@
 # LDAP Binding information
 bindDN          : 'uid=searchuser,cn=users,cn=accounts,dc=example,dc=com'
 bindPassword    : 'searchUIDpwd'
-searchbase      : 'cn=users,cn=accounts,dc=example,dc=com'
+userSearchBase  : 'cn=users,cn=accounts,dc=example,dc=com'
+userAttribute   : 'uid'
 groupSearchBase : 'cn=groups,cn=accounts,dc=example.dc=com'
 groupAttribute  : 'member'
 groupAttributeIsDN : true
