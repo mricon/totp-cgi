@@ -114,8 +114,8 @@ install -m 0644 contrib/vhost-totpcgi-provisioning.conf \
 # Install totpprov script and manpage
 mkdir -p -m 0755 %{buildroot}%{_bindir}
 install -m 0755 contrib/totpprov.py %{buildroot}%{_bindir}/totpprov
-mkdir -p -m 0755 %{buildroot}%{_mandir}/man5
-install -m 0644 contrib/totpprov.5 %{buildroot}%{_mandir}/man5/
+mkdir -p -m 0755 %{buildroot}%{_mandir}/man1
+install -m 0644 contrib/totpprov.1 %{buildroot}%{_mandir}/man1/
 
 # Install SELinux files
 for selinuxvariant in %{selinux_variants}
