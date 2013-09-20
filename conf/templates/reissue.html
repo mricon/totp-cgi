@@ -13,7 +13,7 @@
             <div id="mainarea">
                 <div class="message">
                     <p>
-                    Existing token found
+                    Existing token found. Replace?
                     </p>
                 </div>
                 <div class="explanation">
@@ -24,7 +24,7 @@
                     scratch code).
                     </p>
                 </div>
-                <form id="reissue_form" name="reissue_form" action="$action_url" method="post">
+                <form id="reissue_form" name="reissue_form" action="$action_url" method="post" onsubmit="return confirm('This will delete your current token and issue a new one. Are you sure you want to proceed?')">
                     <input type="hidden" id="action" name="action" value="reissue"/>
                     <table border="0" align="center">
                         <tr>

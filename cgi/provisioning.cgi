@@ -249,8 +249,7 @@ def cgimain():
         user    = form.getfirst('username')
         pincode = form.getfirst('pincode')
 
-    # start by verifying the pincode
-    if pincode is not None:
+        # start by verifying the pincode
         try:
             backends.pincode_backend.verify_user_pincode(user, pincode)
         except Exception, ex:
