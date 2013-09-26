@@ -45,6 +45,7 @@ REQUIREMENTS
 6. pycrypto_ and passlib_ (for encrypted-secret support)
 7. pam_url_ (for PAM support)
 8. python-qrcode_ (for provisioning support)
+9. MySQL-python_ (for MySQL backend support)
 
 All of these dependencies are in EPEL for RHEL 6.
 
@@ -56,6 +57,7 @@ All of these dependencies are in EPEL for RHEL 6.
 .. _pycrypto: https://www.dlitz.net/software/pycrypto/
 .. _passlib: https://code.google.com/p/passlib/
 .. _python-qrcode: https://github.com/lincolnloop/python-qrcode
+.. _MySQL-python: http://sourceforge.net/projects/mysql-python/
 
 AUTHORS
 -------
