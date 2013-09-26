@@ -23,7 +23,7 @@ import totpcgi.utils
 logger = logging.getLogger('totpcgi')
 
 import os
-from fcntl import flock, LOCK_EX, LOCK_UN, LOCK_SH
+from fcntl import lockf, LOCK_EX, LOCK_UN, LOCK_SH
 
 import anydbm
 
@@ -39,7 +39,7 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
 
         try:
             fh = open(self.pincode_file, 'r')
-            flock(fh, LOCK_SH)
+            lockf(fh, LOCK_SH)
 
             while True:
                 line = fh.readline()
@@ -58,14 +58,13 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
             logger.debug('Read %s entries from %s' % 
                          (len(hashcodes), self.pincode_file))
 
-            flock(fh, LOCK_UN)
+            lockf(fh, LOCK_UN)
             fh.close()
 
         except IOError, e:
             logger.debug('%s could not be open for reading' % self.pincode_file)
 
         return hashcodes
-
 
     def verify_user_pincode(self, user, pincode):
         # The format is basically /etc/shadow, except we ignore anything
@@ -131,12 +130,12 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
 
         # Bubble up any write errors up the chain
         fh = open(self.pincode_file, 'w')
-        flock(fh, LOCK_EX)
+        lockf(fh, LOCK_EX)
 
         for user, hashcode in hashcodes.iteritems():
             fh.write('%s:%s\n' % (user, hashcode))
 
-        flock(fh, LOCK_UN)
+        lockf(fh, LOCK_UN)
         fh.close()
 
         if makedb:
@@ -168,16 +167,19 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
             raise totpcgi.UserNotFound('%s.totp does not exist or is not readable' % user)
 
         fh = open(totp_file, 'r')
-        flock(fh, LOCK_SH)
+        lockf(fh, LOCK_SH)
 
         # secret is always the first entry
         secret = fh.readline()
         secret = secret.strip()
 
         using_encrypted_secret = False
-        if secret.find('aes256+hmac256') == 0 and pincode is not None:
-            secret = totpcgi.utils.decrypt_secret(secret, pincode)
+        if secret.find('aes256+hmac256') == 0:
             using_encrypted_secret = True
+            if pincode is not None:
+                secret = totpcgi.utils.decrypt_secret(secret, pincode)
+            else:
+                raise totpcgi.UserSecretError('Secret is encrypted, but no pincode provided')
 
         gaus = totpcgi.GAUserSecret(secret)
 
@@ -214,7 +216,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
                     # don't fail, just pretend we didn't see it
                     continue
 
-        flock(fh, LOCK_UN)
+        lockf(fh, LOCK_UN)
         fh.close()
 
         # Make sure that we have a window_size defined
@@ -237,7 +239,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
             raise totpcgi.SaveFailed('%s could not be saved: %s' % 
                     (totp_file, e))
 
-        flock(fh, LOCK_EX)
+        lockf(fh, LOCK_EX)
         secret = gaus.totp.secret
 
         if pincode is not None:
@@ -252,7 +254,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
         if pincode is None:
             fh.write('\n'.join(gaus.scratch_tokens))
 
-        flock(fh, LOCK_UN)
+        lockf(fh, LOCK_UN)
         fh.close()
 
         logger.debug('Wrote %s' % totp_file)
@@ -285,16 +287,19 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
         state_file = os.path.join(self.state_dir, user) + '.json'
         logger.debug('Loading user state from: %s' % state_file)
         
-        # Don't let anyone but ourselves see the contents of the state file
-        os.umask(0077)
+        # For totpcgiprov and totpcgi to be able to write to the same state
+        # file, we have to create it world-writable. Since we have restricted
+        # permissions on the parent directory (totpcgi:totpcgiprov), plus
+        # selinux labels in place, this should keep this safe from tampering.
+        os.umask(0000)
 
         # we exclusive-lock the file to prevent race conditions resulting
         # in potential token reuse.
-        if os.access(state_file, os.R_OK):
+        if os.access(state_file, os.W_OK):
             logger.debug('%s exists, opening r+' % state_file)
             fh = open(state_file, 'r+')
             logger.debug('Locking state file for user %s' % user)
-            flock(fh, LOCK_EX)
+            lockf(fh, LOCK_EX)
             try:
                 js = json.load(fh)
 
@@ -311,7 +316,7 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
                 # erase the file.
                 logger.debug('Parsing json failed with: %s' % ex)
                 logger.debug('Unlocking state file for user %s' % user)
-                flock(fh, LOCK_UN)
+                lockf(fh, LOCK_UN)
                 raise totpcgi.UserStateError(
                         'Error parsing the state file for: %s' % user)
 
@@ -324,7 +329,7 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
                 raise totpcgi.UserStateError(
                         'Cannot write user state for %s, exiting.' % user)
             logger.debug('Locking state file for user %s' % user)
-            flock(fh, LOCK_EX)
+            lockf(fh, LOCK_EX)
 
 
         # The following condition should never happen, in theory,
@@ -358,7 +363,7 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
         fh.truncate()
 
         logger.debug('Unlocking state file for user %s' % user)
-        flock(fh, LOCK_UN)
+        lockf(fh, LOCK_UN)
         fh.close()
 
         del self.fhs[user]
@@ -368,6 +373,6 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
     def delete_user_state(self, user):
         # this should ONLY be used by test.py
         state_file = os.path.join(self.state_dir, '%s.json' % user)
-        if os.access(state_file, os.R_OK):
+        if os.access(state_file, os.W_OK):
             os.unlink(state_file)
             logger.debug('Removed user state file: %s' % state_file)

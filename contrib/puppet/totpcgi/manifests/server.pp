@@ -22,8 +22,9 @@ class totpcgi::server {
   }
 
   selboolean { 'allow_httpd_mod_auth_pam':
-    value   => 'on',
-    require => Package['mod_authnz_external'],
+    value      => 'on',
+    persistent => true,
+    require    => Package['mod_authnz_external'],
   }
 
   package { ['totpcgi', 'totpcgi-selinux', 'totpcgi-provisioning']:

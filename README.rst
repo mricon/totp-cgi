@@ -8,7 +8,7 @@ A centralized totp solution based on google-authenticator
 :Date:      2012-12-03
 :Copyright: Konstantin Ryabitsev and contributors
 :License:   GPLv2+
-:Version:   0.5.4
+:Version:   0.5.5
 
 DECRIPTION
 ----------

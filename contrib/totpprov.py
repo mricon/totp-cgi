@@ -134,6 +134,23 @@ def encrypt_user_token(backends, config, args):
     backends.secret_backend.save_user_secret(user, gaus, pincode)
     print 'Successfully encrypted user secret'
 
+def decrypt_user_token(backends, config, args):
+    user = args[1]
+    pincode = getpass.getpass('Pincode for user %s: ' % user)
+
+    # Try getting the user secret
+    try:
+        gaus = backends.secret_backend.get_user_secret(user, pincode)
+    except totpcgi.UserNotFound, ex:
+        print 'Error: No existing tokens found for user %s' % user
+        sys.exit(1)
+    except totpcgi.UserSecretError, ex:
+        print 'Error: Could not decrypt the secret for user %s' % user
+        sys.exit(1)
+
+    backends.secret_backend.save_user_secret(user, gaus, None)
+    print 'Successfully decrypted user secret'
+
 def generate_user_token(backends, config, args, pincode=None):
     user = args[1]
     
@@ -228,49 +245,48 @@ if __name__ == '__main__':
     if command == 'delete-user':
         print 'Deleting user %s' % args[1]
         ays()
-    
         delete_user(backends, config, args)
 
     elif command == 'delete-user-state':
         print 'Deleting state data for user %s' % args[1]
         ays()
-    
         delete_user_state(backends, config, args)
 
     elif command == 'delete-user-pincode':
         print 'Deleting pincode for user %s' % args[1]
         ays()
-
         delete_user_pincode(backends, config, args)
 
     elif command == 'delete-user-token':
         print 'Deleting token data for user %s' % args[1]
         ays()
-
         delete_user_secret(backends, config, args)
 
     elif command == 'set-user-pincode':
         print 'Setting pincode for user %s' % args[1]
         ays()
-
         set_user_pincode(backends, config, args)
 
     elif command == 'encrypt-user-token':
         print 'Encrypting user token for %s' % args[1]
         ays()
-
         encrypt_user_token(backends, config, args)
+
+    elif command == 'decrypt-user-token':
+        print 'Decrypting user token for %s' % args[1]
+        ays()
+        decrypt_user_token(backends, config, args)
 
     elif command == 'generate-user-token':
         print 'Generating new token for user %s' % args[1]
         ays()
-        
         generate_user_token(backends, config, args)
 
     elif command == 'provision-user':
         print 'Provisioning new TOTP user %s' % args[1]
         ays()
-
         provision_user(backends, config, args)
 
-    
+    else:
+        parser.error('Unknown command: %s' % command)
+

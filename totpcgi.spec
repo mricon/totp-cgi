@@ -10,7 +10,7 @@
 %define fixfiles_dirs %{_localstatedir}/www/totpcgi %{_localstatedir}/www/totpcgi-provisioning %{_localstatedir}/lib/totpcgi %{_sysconfdir}/totpcgi
 
 Name:       totpcgi
-Version:    0.5.4
+Version:    0.5.5
 Release:    1%{?dist}
 Summary:    A centralized totp solution based on google-authenticator
 
@@ -89,7 +89,7 @@ install -m 0640 conf/*.conf %{buildroot}%{_sysconfdir}/totpcgi/
 install -m 0640 conf/templates/*.html %{buildroot}%{_sysconfdir}/totpcgi/templates/
 
 # Create the state directory
-mkdir -p -m 0700 %{buildroot}%{_localstatedir}/lib/totpcgi
+mkdir -p -m 0770 %{buildroot}%{_localstatedir}/lib/totpcgi
 
 # Create the CGI dirs
 mkdir -p -m 0751 \
@@ -114,8 +114,8 @@ install -m 0644 contrib/vhost-totpcgi-provisioning.conf \
 # Install totpprov script and manpage
 mkdir -p -m 0755 %{buildroot}%{_bindir}
 install -m 0755 contrib/totpprov.py %{buildroot}%{_bindir}/totpprov
-mkdir -p -m 0755 %{buildroot}%{_mandir}/man5
-install -m 0644 contrib/totpprov.5 %{buildroot}%{_mandir}/man5/
+mkdir -p -m 0755 %{buildroot}%{_mandir}/man1
+install -m 0644 contrib/totpprov.1 %{buildroot}%{_mandir}/man1/
 
 # Install SELinux files
 for selinuxvariant in %{selinux_variants}
@@ -147,6 +147,12 @@ fi
 if [ -f /sbin/fixfiles ] ; then
   /sbin/fixfiles -R totpcgi-provisioning restore || :
 fi
+# make sure /var/lib/totpcgi is 0770 totpcgiprov:totpcgi
+chown -R %{totpcgiprovuser}:%{totpcgiuser} %{_localstatedir}/lib/totpcgi || :
+chmod 0770 %{_localstatedir}/lib/totpcgi || :
+# make sure state files are accessible to provisioning
+chmod 0660 %{_localstatedir}/lib/totpcgi/*.json >/dev/null 2>&1 || :
+
 
 %post selinux
 for selinuxvariant in %{selinux_variants}
@@ -174,7 +180,7 @@ fi
 %attr(-, %{totpcgiuser}, %{totpcgiuser}) %{_localstatedir}/www/totpcgi/*.cgi
 %config(noreplace) %attr(-, -, %{totpcgiuser}) %{_sysconfdir}/totpcgi/totpcgi.conf
 %config(noreplace) %{_sysconfdir}/httpd/conf.d/totpcgi.conf
-%attr(-, %{totpcgiuser}, %{totpcgiuser}) %{_localstatedir}/lib/totpcgi
+%attr(-, %{totpcgiprovuser}, %{totpcgiuser}) %{_localstatedir}/lib/totpcgi
 
 %files -n python-totpcgi
 %doc COPYING
@@ -200,6 +206,9 @@ fi
 
 
 %changelog
+* Fri Sep 20 2013 Konstantin Ryabitsev <mricon@kernel.org> - 0.5.5-1
+- New version 0.5.5 with new features
+
 * Mon Dec 03 2012 Konstantin Ryabitsev <mricon@kernel.org> - 0.5.4-1
 - Make sure provisioning pages are not cached.
 - Minor documentation fixes.

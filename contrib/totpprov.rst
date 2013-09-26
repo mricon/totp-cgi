@@ -6,10 +6,11 @@ Simple provisioning script for totpcgi
 --------------------------------------
 
 :Author:    konstantin@linuxfoundation.org
-:Date:      2012-05-25
+:Date:      2013-09-20
 :Copyright: Linux Foundation and contributors
 :License:   GPLv2+
-:Version:   0.5.0
+:Version:   0.5.5
+:Manual section: 1
 
 SYNOPSIS
 --------
@@ -31,22 +32,24 @@ OPTIONS
 
 COMMANDS
 --------
-delete-user           
+delete-user
     deletes user record
-delete-user-state     
+delete-user-state
     deletes any existing state information for user
-delete-user-pincode   
+delete-user-pincode
     deletes pincode entry for user
-delete-user-token     
+delete-user-token
     deletes the token issued to user
 
-set-user-pincode      
+set-user-pincode
     sets pincode for user
-encrypt-user-token    
+encrypt-user-token
     encrypts existing token with the user's pincode
-generate-user-token  
+decrypt-user-token
+    decrypts existing encrypted token with the user's pincode
+generate-user-token
     generates a new token for user
-provision-user        
+provision-user
     provisions a new user
 
 EXAMPLES
@@ -58,6 +61,10 @@ To provision a user::
 To delete a user::
 
     totpprov delete-user bobafett
+
+To delete a token::
+
+    totpprov delete-user-token bobafett
 
 To set/change user pincode::
 
