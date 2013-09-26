@@ -20,7 +20,7 @@ Source0:    %{name}-%{version}.tar.gz
 
 BuildArch:  noarch
 
-BuildRequires: checkpolicy, selinux-policy-devel, hardlink, python2-devel
+BuildRequires: checkpolicy, selinux-policy-devel, selinux-policy-doc, hardlink, python2-devel
 BuildRequires: /usr/share/selinux/devel/policyhelp
 
 Requires:   httpd, mod_ssl
