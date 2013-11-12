@@ -45,6 +45,14 @@ class Backends:
             pg_connect_string = config.get('secret_backend', 'pg_connect_string')
             self.secret_backend = totpcgi.backends.pgsql.GASecretBackend(pg_connect_string)
 
+        elif secret_backend_engine == 'mysql':
+            import totpcgi.backends.mysql
+            mysql_connect_host = config.get('secret_backend', 'mysql_connect_host')
+            mysql_connect_user = config.get('secret_backend', 'mysql_connect_user')
+            mysql_connect_password = config.get('secret_backend', 'mysql_connect_password')
+            mysql_connect_db  = config.get('secret_backend', 'mysql_connect_db')
+            self.secret_backend = totpcgi.backends.mysql.GASecretBackend(mysql_connect_host, mysql_connect_user, mysql_connect_password, mysql_connect_db)
+
         else:
             raise BackendNotSupported(
                     'secret_backend engine not supported: %s' % secret_backend_engine)
@@ -60,6 +68,14 @@ class Backends:
             import totpcgi.backends.pgsql
             pg_connect_string = config.get('pincode_backend', 'pg_connect_string')
             self.pincode_backend = totpcgi.backends.pgsql.GAPincodeBackend(pg_connect_string)
+
+        elif pincode_backend_engine == 'mysql':
+            import totpcgi.backends.mysql
+            mysql_connect_host = config.get('pincode_backend', 'mysql_connect_host')
+            mysql_connect_user = config.get('pincode_backend', 'mysql_connect_user')
+            mysql_connect_password = config.get('pincode_backend', 'mysql_connect_password')
+            mysql_connect_db  = config.get('pincode_backend', 'mysql_connect_db')
+            self.pincode_backend = totpcgi.backends.mysql.GAPincodeBackend(mysql_connect_host, mysql_connect_user, mysql_connect_password, mysql_connect_db)
 
         elif pincode_backend_engine == 'ldap':
             import totpcgi.backends.ldap
@@ -84,6 +100,14 @@ class Backends:
             import totpcgi.backends.pgsql
             pg_connect_string = config.get('state_backend', 'pg_connect_string')
             self.state_backend = totpcgi.backends.pgsql.GAStateBackend(pg_connect_string)
+
+        elif state_backend_engine == 'mysql':
+            import totpcgi.backends.mysql
+            mysql_connect_host = config.get('state_backend', 'mysql_connect_host')
+            mysql_connect_user = config.get('state_backend', 'mysql_connect_user')
+            mysql_connect_password = config.get('state_backend', 'mysql_connect_password')
+            mysql_connect_db  = config.get('state_backend', 'mysql_connect_db')
+            self.state_backend = totpcgi.backends.mysql.GAStateBackend(mysql_connect_host, mysql_connect_user, mysql_connect_password, mysql_connect_db)
 
         else:
             syslog.syslog(syslog.LOG_CRIT, 
