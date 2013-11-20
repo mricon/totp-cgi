@@ -180,7 +180,12 @@ class GAUser:
                     if token in state.used_scratch_tokens:
                         success = (False, 'Scratch-token already used once')
                     elif token not in secret.scratch_tokens:
-                        success = (False, 'Not a valid scratch-token')
+                        # we get out early, without updating state, since we
+                        # will retry this as a pincode+6-digit token and the
+                        # failure will be recorded at that step.
+                        self.backends.state_backend.update_user_state(
+                                self.user, state)
+                        raise VerifyFailed('Not a valid scratch-token')
                     else:
                         success = (True, 'Scratch-token used')
                         new_state.used_scratch_tokens.append(token)

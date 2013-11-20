@@ -426,7 +426,7 @@ class GATest(unittest.TestCase):
 
             cleanState()
 
-        elif PINCODE_BACKEND == 'pgsql':
+        if PINCODE_BACKEND == 'pgsql':
             backends.pincode_backend.delete_user_hashcode('valid')
             logger.debug('Testing without a user pincode record present')
             with self.assertRaisesRegexp(totpcgi.UserNotFound, 
@@ -434,7 +434,7 @@ class GATest(unittest.TestCase):
                 ga.verify_user_token('valid', token)
 
 
-        elif PINCODE_BACKEND in ('pgsql', 'File'):
+        if PINCODE_BACKEND in ('pgsql', 'File'):
             logger.debug('Testing with 1-digit long pincode')
             setCustomPincode('1')
             ret = ga.verify_user_token('valid', '1'+tokencode)
@@ -442,10 +442,18 @@ class GATest(unittest.TestCase):
 
             cleanState()
 
-            logger.debug('Testing with 2-digit long pincode')
+            logger.debug('Testing with 2-digit long pincode + valid tokencode')
             setCustomPincode('99')
             ret = ga.verify_user_token('valid', '99'+tokencode)
             self.assertEqual(ret, 'Valid token used')
+
+            cleanState()
+
+            logger.debug('Testing with 2-digit long pincode + invalid tokencode')
+            setCustomPincode('99')
+            with self.assertRaisesRegexp(totpcgi.VerifyFailed,
+                'Not a valid token'):
+                ret = ga.verify_user_token('valid', '99'+'000000')
 
             cleanState()
 
@@ -456,11 +464,10 @@ class GATest(unittest.TestCase):
 
             cleanState()
 
-            logger.debug('Testing with junk pincode')
-            setCustomPincode(pincode, algo='junk')
-            with self.assertRaisesRegexp(totpcgi.UserPincodeError,
-                'Unsupported hashcode format'):
-                ga.verify_user_token('valid', token)
+            logger.debug('Testing with md5')
+            setCustomPincode(pincode, algo='md5')
+            ret = ga.verify_user_token('valid', token)
+            self.assertEqual(ret, 'Valid token used')
 
             cleanState()
 

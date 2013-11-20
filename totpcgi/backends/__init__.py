@@ -156,10 +156,12 @@ class GAPincodeBackend:
 
     def _verify_by_hashcode(self, pincode, hashcode):
         logger.debug('Will test against %s' % hashcode)
-        from passlib.apps import custom_app_context as pwd_context
+        from passlib.context import CryptContext
+        myctx = CryptContext(schemes=['sha256_crypt', 'sha512_crypt',
+            'bcrypt', 'md5_crypt'])
 
         try:
-            if not pwd_context.verify(pincode, hashcode):
+            if not myctx.verify(pincode, hashcode):
                 raise totpcgi.UserPincodeError('Pincode did not match.')
 
             return True
