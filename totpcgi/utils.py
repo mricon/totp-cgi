@@ -25,6 +25,9 @@ import getpass
 import logging
 import pyotp
 
+import string
+import struct
+
 import totpcgi
 
 logger = logging.getLogger('totpcgi')
@@ -58,29 +61,18 @@ def hash_pincode(pincode, algo='bcrypt'):
     return passlib.hash.bcrypt.encrypt(pincode)
 
 
-def generate_secret(rate_limit=(3,30), window_size=3, scratch_tokens=5):
-    good_chars = base64._b32alphabet.values()
-
-    secret = ''
-    while len(secret) < 16:
-        rchar = os.urandom(1)
-        if rchar in good_chars:
-            secret += rchar
+def generate_secret(rate_limit=(3,30), window_size=3, scratch_tokens=5, bs=80):
+    # os.urandom expects bytes, so we divide by 8
+    secret = base64.b32encode(os.urandom(bs/8))
 
     gaus = totpcgi.GAUserSecret(secret)
 
     gaus.rate_limit  = rate_limit
     gaus.window_size = window_size
 
-    good_chars = '0123456789'
     for i in xrange(scratch_tokens):
-        scratch_token = ''
-        while len(scratch_token) < 8:
-            rchar = os.urandom(1)
-            if rchar in good_chars:
-                scratch_token += rchar
-
-        gaus.scratch_tokens.append(scratch_token)
+        token = string.zfill(struct.unpack('I', os.urandom(4))[0], 8)[-8:]
+        gaus.scratch_tokens.append(token)
 
     return gaus
 

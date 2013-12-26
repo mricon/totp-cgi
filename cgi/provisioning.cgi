@@ -197,6 +197,11 @@ def generate_secret(config):
     window_size = config.getint('secret', 'window_size')
     rate_limit = config.get('secret', 'rate_limit')
 
+    try:
+        secret_bits = config.getint('secret', 'bits')
+    except:
+        secret_bits = 80
+
     # scratch tokens don't make any sense with encrypted secret
     if not encrypt_secret:
         scratch_tokens_n = config.getint('secret', 'scratch_tokens_n')
@@ -207,10 +212,10 @@ def generate_secret(config):
     rate_limit = (int(times), int(secs))
 
     gaus = totpcgi.utils.generate_secret(rate_limit, window_size, 
-        scratch_tokens_n)
+        scratch_tokens_n, bs=secret_bits)
 
     return gaus
-    
+
 
 def cgimain():
     try:
