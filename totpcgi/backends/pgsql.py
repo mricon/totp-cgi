@@ -31,7 +31,7 @@ userids = {}
 def db_connect(connect_string):
     global dbconn
 
-    if connect_string not in dbconn:
+    if connect_string not in dbconn or dbconn[connect_string].closed:
         dbconn[connect_string] = psycopg2.connect(connect_string)
 
     return dbconn[connect_string]

@@ -31,7 +31,7 @@ userids = {}
 def db_connect(connect_host, connect_user, connect_password, connect_db):
     global dbconn
 
-    if connect_host not in dbconn:
+    if connect_host not in dbconn or not dbconn[connect_host].open:
         dbconn[connect_host] = MySQLdb.connect( host=connect_host, user=connect_user, passwd=connect_password,db=connect_db)
 
     return dbconn[connect_host]
