@@ -15,22 +15,25 @@
 #
 import logging
 import totpcgi
+import syslog
 
 import exceptions
 
 logger = logging.getLogger('totpcgi')
+
 
 class BackendNotSupported(exceptions.Exception):
     def __init__(self, message):
         exceptions.Exception.__init__(self, message)
         logger.debug('!BackendNotSupported: %s' % message)
 
+
 class Backends:
     
     def __init__(self):
-        self.secret_backend  = None
+        self.secret_backend = None
         self.pincode_backend = None
-        self.state_backend   = None
+        self.state_backend = None
 
     def load_from_config(self, config):
         secret_backend_engine = config.get('secret_backend', 'engine')
@@ -50,12 +53,14 @@ class Backends:
             mysql_connect_host = config.get('secret_backend', 'mysql_connect_host')
             mysql_connect_user = config.get('secret_backend', 'mysql_connect_user')
             mysql_connect_password = config.get('secret_backend', 'mysql_connect_password')
-            mysql_connect_db  = config.get('secret_backend', 'mysql_connect_db')
-            self.secret_backend = totpcgi.backends.mysql.GASecretBackend(mysql_connect_host, mysql_connect_user, mysql_connect_password, mysql_connect_db)
+            mysql_connect_db = config.get('secret_backend', 'mysql_connect_db')
+            self.secret_backend = totpcgi.backends.mysql.GASecretBackend(
+                mysql_connect_host, mysql_connect_user,
+                mysql_connect_password, mysql_connect_db)
 
         else:
             raise BackendNotSupported(
-                    'secret_backend engine not supported: %s' % secret_backend_engine)
+                'secret_backend engine not supported: %s' % secret_backend_engine)
 
         pincode_backend_engine = config.get('pincode_backend', 'engine')
 
@@ -74,20 +79,21 @@ class Backends:
             mysql_connect_host = config.get('pincode_backend', 'mysql_connect_host')
             mysql_connect_user = config.get('pincode_backend', 'mysql_connect_user')
             mysql_connect_password = config.get('pincode_backend', 'mysql_connect_password')
-            mysql_connect_db  = config.get('pincode_backend', 'mysql_connect_db')
-            self.pincode_backend = totpcgi.backends.mysql.GAPincodeBackend(mysql_connect_host, mysql_connect_user, mysql_connect_password, mysql_connect_db)
+            mysql_connect_db = config.get('pincode_backend', 'mysql_connect_db')
+            self.pincode_backend = totpcgi.backends.mysql.GAPincodeBackend(
+                mysql_connect_host, mysql_connect_user,
+                mysql_connect_password, mysql_connect_db)
 
         elif pincode_backend_engine == 'ldap':
             import totpcgi.backends.ldap
-            ldap_url    = config.get('pincode_backend', 'ldap_url')
-            ldap_dn     = config.get('pincode_backend', 'ldap_dn')
+            ldap_url = config.get('pincode_backend', 'ldap_url')
+            ldap_dn = config.get('pincode_backend', 'ldap_dn')
             ldap_cacert = config.get('pincode_backend', 'ldap_cacert')
 
             self.pincode_backend = totpcgi.backends.ldap.GAPincodeBackend(ldap_url, ldap_dn, ldap_cacert)
         else:
             raise BackendNotSupported(
-                    'pincode_engine not supported: %s' % pincode_backend_engine)
-
+                'pincode_engine not supported: %s' % pincode_backend_engine)
 
         state_backend_engine = config.get('state_backend', 'engine')
 
@@ -106,12 +112,15 @@ class Backends:
             mysql_connect_host = config.get('state_backend', 'mysql_connect_host')
             mysql_connect_user = config.get('state_backend', 'mysql_connect_user')
             mysql_connect_password = config.get('state_backend', 'mysql_connect_password')
-            mysql_connect_db  = config.get('state_backend', 'mysql_connect_db')
-            self.state_backend = totpcgi.backends.mysql.GAStateBackend(mysql_connect_host, mysql_connect_user, mysql_connect_password, mysql_connect_db)
+            mysql_connect_db = config.get('state_backend', 'mysql_connect_db')
+            self.state_backend = totpcgi.backends.mysql.GAStateBackend(
+                mysql_connect_host, mysql_connect_user,
+                mysql_connect_password, mysql_connect_db)
 
         else:
             syslog.syslog(syslog.LOG_CRIT, 
-                    'state_backend engine not supported: %s' % state_backend_engine)
+                'state_backend engine not supported: %s' % state_backend_engine)
+
 
 ############################### API STUBS #################################
 
@@ -128,6 +137,7 @@ class GAStateBackend:
     def delete_user_state(self, user):
         pass
 
+
 class GASecretBackend:
     def __init__(self):
         pass
@@ -140,6 +150,7 @@ class GASecretBackend:
 
     def delete_user_secret(self, user):
         pass
+
 
 class GAPincodeBackend:
     def __init__(self):
@@ -154,11 +165,12 @@ class GAPincodeBackend:
     def delete_user_hashcode(self, user):
         pass
 
-    def _verify_by_hashcode(self, pincode, hashcode):
+    @staticmethod
+    def _verify_by_hashcode(pincode, hashcode):
         logger.debug('Will test against %s' % hashcode)
         from passlib.context import CryptContext
         myctx = CryptContext(schemes=['sha256_crypt', 'sha512_crypt',
-            'bcrypt', 'md5_crypt'])
+                                      'bcrypt', 'md5_crypt'])
 
         try:
             if not myctx.verify(pincode, hashcode):
@@ -168,4 +180,3 @@ class GAPincodeBackend:
 
         except ValueError:
             raise totpcgi.UserPincodeError('Unsupported hashcode format')
-

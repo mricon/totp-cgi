@@ -21,9 +21,7 @@ import os
 import base64
 import hashlib
 import hmac
-import getpass
 import logging
-import pyotp
 
 import string
 import struct
@@ -36,9 +34,10 @@ from Crypto.Cipher import AES
 from passlib.utils.pbkdf2 import pbkdf2
 
 AES_BLOCK_SIZE = 16
-KDF_ITER       = 2000
-SALT_SIZE      = 32
-KEY_SIZE       = 32
+KDF_ITER = 2000
+SALT_SIZE = 32
+KEY_SIZE = 32
+
 
 def hash_pincode(pincode, algo='bcrypt'):
     if algo not in ('bcrypt', 'sha256', 'sha512', 'md5'):
@@ -61,13 +60,13 @@ def hash_pincode(pincode, algo='bcrypt'):
     return passlib.hash.bcrypt.encrypt(pincode)
 
 
-def generate_secret(rate_limit=(3,30), window_size=3, scratch_tokens=5, bs=80):
+def generate_secret(rate_limit=(3, 30), window_size=3, scratch_tokens=5, bs=80):
     # os.urandom expects bytes, so we divide by 8
     secret = base64.b32encode(os.urandom(bs/8))
 
     gaus = totpcgi.GAUserSecret(secret)
 
-    gaus.rate_limit  = rate_limit
+    gaus.rate_limit = rate_limit
     gaus.window_size = window_size
 
     for i in xrange(scratch_tokens):
@@ -84,11 +83,11 @@ def encrypt_secret(data, pincode):
     key = pbkdf2(pincode, salt, KDF_ITER, KEY_SIZE*2, prf='hmac-sha256')
 
     # split the key in two, one used for AES, another for HMAC
-    aes_key  = key[:KEY_SIZE]
+    aes_key = key[:KEY_SIZE]
     hmac_key = key[KEY_SIZE:]
 
     pad = AES_BLOCK_SIZE - len(data) % AES_BLOCK_SIZE
-    data = data + pad * chr(pad)
+    data += pad * chr(pad)
     iv_bytes = os.urandom(AES_BLOCK_SIZE)
     cypher = AES.new(aes_key, AES.MODE_CBC, iv_bytes)
     data = iv_bytes + cypher.encrypt(data)
@@ -96,19 +95,20 @@ def encrypt_secret(data, pincode):
 
     # jab it all together in a base64-encrypted format
     b64str = ('aes256+hmac256$' 
-             + base64.b64encode(salt).replace('\n', '') + '$'
-             + base64.b64encode(data+sig).replace('\n', ''))
+              + base64.b64encode(salt).replace('\n', '') + '$'
+              + base64.b64encode(data+sig).replace('\n', ''))
 
     logger.debug('Encrypted secret: %s' % b64str)
 
     return b64str
+
 
 def decrypt_secret(b64str, pincode):
     # split the secret into components
     try:
         (scheme, salt, ciphertext) = b64str.split('$')
 
-        salt       = base64.b64decode(salt)
+        salt = base64.b64decode(salt)
         ciphertext = base64.b64decode(ciphertext)
 
     except (ValueError, TypeError):
@@ -116,22 +116,22 @@ def decrypt_secret(b64str, pincode):
 
     key = pbkdf2(pincode, salt, KDF_ITER, KEY_SIZE*2, prf='hmac-sha256')
 
-    aes_key  = key[:KEY_SIZE]
+    aes_key = key[:KEY_SIZE]
     hmac_key = key[KEY_SIZE:]
 
     sig_size = hashlib.sha256().digest_size
-    sig      = ciphertext[-sig_size:]
-    data     = ciphertext[:-sig_size]
+    sig = ciphertext[-sig_size:]
+    data = ciphertext[:-sig_size]
 
     # verify hmac sig first
     if hmac.new(hmac_key, data, hashlib.sha256).digest() != sig:
         raise totpcgi.UserSecretError('Failed to verify hmac!')
 
     iv_bytes = data[:AES_BLOCK_SIZE]
-    data     = data[AES_BLOCK_SIZE:]
+    data = data[AES_BLOCK_SIZE:]
 
     cypher = AES.new(aes_key, AES.MODE_CBC, iv_bytes)
-    data   = cypher.decrypt(data)
+    data = cypher.decrypt(data)
     secret = data[:-ord(data[-1])]
 
     logger.debug('Decryption successful')

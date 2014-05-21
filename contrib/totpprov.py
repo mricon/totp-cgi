@@ -18,7 +18,6 @@
 # 02111-1307, USA.
 #
 
-import os
 import sys
 
 from optparse import OptionParser
@@ -35,11 +34,13 @@ syslog.openlog('totpprov', syslog.LOG_PID, syslog.LOG_AUTH)
 
 from string import Template
 
+
 def ays():
     ays = raw_input('Are you sure [y/N]: ')
     if ays != 'y':
         print 'Exiting on user command'
         sys.exit(0)
+
 
 def ask_for_new_pincode():
     pincode = None
@@ -50,6 +51,7 @@ def ask_for_new_pincode():
             pincode = None
 
     return pincode
+
 
 def ask_for_user_pincode(backends, user):
     pincode = None
@@ -87,6 +89,7 @@ def generate_secret(config):
 
     return gaus
 
+
 def delete_user(backends, config, args):
     backends.secret_backend.delete_user_secret(args[1])
     backends.pincode_backend.delete_user_hashcode(args[1])
@@ -94,17 +97,21 @@ def delete_user(backends, config, args):
 
     print 'User %s deleted' % args[1]
 
+
 def delete_user_state(backends, config, args):
     backends.state_backend.delete_user_state(args[1])
     print 'State data for user %s deleted' % args[1]
+
 
 def delete_user_pincode(backends, config, args):
     backends.pincode_backend.delete_user_hashcode(args[1])
     print 'Pincode for user %s deleted' % args[1]
 
+
 def delete_user_secret(backends, config, args):
     backends.secret_backend.delete_user_secret(args[1])
     print 'Google authenticator token for user %s deleted' % args[1]
+
 
 def set_user_pincode(backends, config, args):
     usehash = config.get('pincode', 'usehash')
@@ -120,6 +127,7 @@ def set_user_pincode(backends, config, args):
     print 'Verified successfully.'
 
     return pincode
+
 
 def encrypt_user_token(backends, config, args):
     user = args[1]
@@ -138,6 +146,7 @@ def encrypt_user_token(backends, config, args):
     backends.secret_backend.save_user_secret(user, gaus, pincode)
     print 'Successfully encrypted user secret'
 
+
 def decrypt_user_token(backends, config, args):
     user = args[1]
     pincode = getpass.getpass('Pincode for user %s: ' % user)
@@ -154,6 +163,7 @@ def decrypt_user_token(backends, config, args):
 
     backends.secret_backend.save_user_secret(user, gaus, None)
     print 'Successfully decrypted user secret'
+
 
 def generate_user_token(backends, config, args, pincode=None):
     user = args[1]
@@ -193,6 +203,7 @@ def generate_user_token(backends, config, args, pincode=None):
     if gaus.scratch_tokens:
         print 'Scratch tokens:'
         print '\n'.join(gaus.scratch_tokens)
+
 
 def provision_user(backends, config, args):
     user = args[1]

@@ -28,6 +28,7 @@ logger = logging.getLogger('totpcgi')
 dbconn = {}
 userids = {}
 
+
 def db_connect(connect_string):
     global dbconn
 
@@ -35,6 +36,7 @@ def db_connect(connect_string):
         dbconn[connect_string] = psycopg2.connect(connect_string)
 
     return dbconn[connect_string]
+
 
 def get_user_id(conn, user):
     global userids
@@ -56,6 +58,7 @@ def get_user_id(conn, user):
 
     userids[user] = row[0]
     return userids[user]
+
 
 class GAStateBackend(totpcgi.backends.GAStateBackend):
     def __init__(self, connect_string):
@@ -163,6 +166,7 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
 
         self.conn.commit()
 
+
 class GASecretBackend(totpcgi.backends.GASecretBackend):
     def __init__(self, connect_string):
         totpcgi.backends.GASecretBackend.__init__(self)
@@ -237,8 +241,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
                         (userid, secret, rate_limit_times,
                          rate_limit_seconds, window_size)
                  VALUES (%s, %s, %s, %s, %s)''', 
-                        (userid, secret, gaus.rate_limit[0], gaus.rate_limit[1],
-                             gaus.window_size))
+                    (userid, secret, gaus.rate_limit[0], gaus.rate_limit[1], gaus.window_size))
 
         for token in gaus.scratch_tokens:
             cur.execute('''
@@ -317,4 +320,3 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
     def delete_user_hashcode(self, user):
         self._delete_user_hashcode(user)
         self.conn.commit()
-

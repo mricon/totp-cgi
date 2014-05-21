@@ -26,35 +26,42 @@ logger = logging.getLogger('totpcgi')
 
 SANE_USERNAME_RE = re.compile(r'([\w\.@=+_-]+)')
 
+
 class UserNotFound(exceptions.Exception):
     def __init__(self, message):
         exceptions.Exception.__init__(self, message)
         logger.debug('!UserNotFound: %s' % message)
+
 
 class UserSecretError(exceptions.Exception):
     def __init__(self, message):
         exceptions.Exception.__init__(self, message)
         logger.debug('!UserSecretError: %s' % message)
 
+
 class UserStateError(exceptions.Exception):
     def __init__(self, message):
         exceptions.Exception.__init__(self, message)
         logger.debug('!UserStateError: %s' % message)
+
 
 class UserPincodeError(exceptions.Exception):
     def __init__(self, message):
         exceptions.Exception.__init__(self, message)
         logger.debug('!UserPincodeError: %s' % message)
 
+
 class VerifyFailed(exceptions.Exception):
     def __init__(self, message):
         exceptions.Exception.__init__(self, message)
         logger.debug('!VerifyFailed: %s' % message)
 
+
 class SaveFailed(exceptions.Exception):
     def __init__(self, message):
         exceptions.Exception.__init__(self, message)
         logger.debug('!SaveFailed: %s' % message)
+
 
 class DeleteFailed(exceptions.Exception):
     def __init__(self, message):
@@ -64,9 +71,10 @@ class DeleteFailed(exceptions.Exception):
 
 class GAUserState:
     def __init__(self):
-        self.fail_timestamps     = []
-        self.success_timestamps  = []
+        self.fail_timestamps = []
+        self.success_timestamps = []
         self.used_scratch_tokens = []
+
 
 class GAUserSecret:
     def __init__(self, secret):
@@ -75,14 +83,14 @@ class GAUserSecret:
         try:
             self.totp = pyotp.TOTP(secret)
 
-            self.token     = self.totp.now()
+            self.token = self.totp.now()
             self.timestamp = int(time.time())
 
         except Exception, ex:
             raise UserSecretError('Failed to generate totp: %s' % str(ex))
 
-        self.rate_limit     = (3, 30)
-        self.window_wize    = 0
+        self.rate_limit = (3, 30)
+        self.window_size = 0
         self.scratch_tokens = []
 
     def get_token_at(self, timestamp):
@@ -96,13 +104,14 @@ class GAUser:
         if not mo or mo.group(1) != user:
             raise VerifyFailed('Username contains invalid characters')
 
-        self.user     = user
+        self.user = user
         self.backends = backends
 
     def verify_pincode(self, pincode):
         return self.backends.pincode_backend.verify_user_pincode(self.user, pincode)
 
     def verify_token(self, token, pincode=None):
+        success = (False, 'Verification failed')
 
         try:
             secret = self.backends.secret_backend.get_user_secret(self.user, pincode)
@@ -118,7 +127,7 @@ class GAUser:
             self.backends.state_backend.update_user_state(self.user, state)
             raise ex
 
-        state     = self.backends.state_backend.get_user_state(self.user)
+        state = self.backends.state_backend.get_user_state(self.user)
         new_state = GAUserState()
 
         used_tokens = []
@@ -156,7 +165,6 @@ class GAUser:
         logger.debug('used_tokens=%s' % used_tokens)
 
         used_timestamp = secret.timestamp
-        used_token     = secret.token
 
         if len(new_state.fail_timestamps) >= secret.rate_limit[0]:
             success = (False, 'Rate-limit reached, please try again later')
@@ -184,7 +192,7 @@ class GAUser:
                         # will retry this as a pincode+6-digit token and the
                         # failure will be recorded at that step.
                         self.backends.state_backend.update_user_state(
-                                self.user, state)
+                            self.user, state)
                         raise VerifyFailed('Not a valid scratch-token')
                     else:
                         success = (True, 'Scratch-token used')
@@ -205,21 +213,20 @@ class GAUser:
                         if secret.window_size > 0:
                             # okay, let's try within the window_size
                             start = secret.timestamp-(secret.window_size*10)
-                            end   = secret.timestamp+(secret.window_size*10)+1
+                            end = secret.timestamp+(secret.window_size*10)+1
                             logger.debug('start=%s, end=%s' % (start, end))
                             for timestamp in xrange(start, end, 10):
                                 at_token = secret.get_token_at(timestamp)
                                 logger.debug('timestamp=%s, at_token=%s' %
-                                        (timestamp, at_token))
+                                             (timestamp, at_token))
                                 if at_token == token:
                                     used_timestamp = timestamp
-                                    used_token = token
                                     success = (True, 
-                                        'Valid token within window size used')
+                                               'Valid token within window size used')
                                     break
 
             # Adjust state accordingly
-            if success[0] == True:
+            if success[0] is True:
                 new_state.success_timestamps.append(used_timestamp)
             else:
                 # Add all timestamps that are within the back-window
@@ -230,10 +237,11 @@ class GAUser:
 
         logger.debug('success=%s' % str(success))
 
-        if success[0] == False:
+        if success[0] is False:
             raise VerifyFailed(success[1])
 
         return success[1]
+
 
 class GoogleAuthenticator:
 
@@ -262,7 +270,7 @@ class GoogleAuthenticator:
                 itoken = int(token)
                 # let's try to load it as an 8-digit token
                 try:
-                    logger.debug('Trying to verify as an 8-digit scratch-token')
+                    logger.debug('Trying to verify %s as an 8-digit scratch-token' % itoken)
 
                     success = user.verify_token(token)
                     if self.require_pincode:
@@ -276,7 +284,7 @@ class GoogleAuthenticator:
                 logger.debug('8-char token used, but is not an int')
         
         # Let's try to verify as a pincode + 6-digit 
-        pincode   = token[:-6]
+        pincode = token[:-6]
         tokencode = token[-6:]
 
         try:
@@ -287,7 +295,7 @@ class GoogleAuthenticator:
 
         logger.debug('Trying to verify as pincode + 8-digit scratch code')
 
-        pincode   = token[:-8]
+        pincode = token[:-8]
         tokencode = token[-8:]
 
         try:
@@ -296,7 +304,7 @@ class GoogleAuthenticator:
             # Run it anyway to record the timestamp as used
             try:
                 user.verify_token(tokencode, pincode)
-            except VerifyFailed, vfex:
+            except VerifyFailed:
                 # We expect it to fail here, but this is not the error code
                 # we want to return to the app.
                 pass
@@ -304,4 +312,3 @@ class GoogleAuthenticator:
             raise ex
 
         return user.verify_token(tokencode, pincode)
-

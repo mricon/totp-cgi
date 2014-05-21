@@ -27,6 +27,7 @@ from fcntl import lockf, LOCK_EX, LOCK_UN, LOCK_SH
 
 import anydbm
 
+
 class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
     def __init__(self, pincode_file):
         totpcgi.backends.GAPincodeBackend.__init__(self)
@@ -61,7 +62,7 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
             lockf(fh, LOCK_UN)
             fh.close()
 
-        except IOError, e:
+        except IOError:
             logger.debug('%s could not be open for reading' % self.pincode_file)
 
         return hashcodes
@@ -151,6 +152,7 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
     def delete_user_hashcode(self, user):
         self.save_user_hashcode(user, None)
 
+
 class GASecretBackend(totpcgi.backends.GASecretBackend):
     def __init__(self, secrets_dir):
         totpcgi.backends.GASecretBackend.__init__(self)
@@ -199,7 +201,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
 
                 elif line[2:13] == 'WINDOW_SIZE':
                     window_size = int(line[14:])
-                    if window_size > 0 and window_size < 3:
+                    if 0 < window_size < 3:
                         window_size = 3
                     gaus.window_size = window_size
 
@@ -227,9 +229,6 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
 
         return gaus
 
-    def get_user_hashcode(self, user):
-        return hashcode
-
     def save_user_secret(self, user, gaus, pincode=None):
         totp_file = os.path.join(self.secrets_dir, user) + '.totp'
 
@@ -237,7 +236,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
             fh = open(totp_file, 'w')
         except IOError as e:
             raise totpcgi.SaveFailed('%s could not be saved: %s' % 
-                    (totp_file, e))
+                                     (totp_file, e))
 
         lockf(fh, LOCK_EX)
         secret = gaus.totp.secret
@@ -259,7 +258,6 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
 
         logger.debug('Wrote %s' % totp_file)
 
-
     def delete_user_secret(self, user):
         totp_file = os.path.join(self.secrets_dir, user) + '.totp'
 
@@ -267,7 +265,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
             os.unlink(totp_file)
         except (OSError, IOError) as e:
             raise totpcgi.DeleteFailed('%s could not be deleted: %s' %
-                    (totp_file, e))
+                                       (totp_file, e))
 
 
 class GAStateBackend(totpcgi.backends.GAStateBackend):
@@ -305,8 +303,8 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
 
                 logger.debug('loaded state=%s' % js)
 
-                state.fail_timestamps     = js['fail_timestamps']
-                state.success_timestamps  = js['success_timestamps']
+                state.fail_timestamps = js['fail_timestamps']
+                state.success_timestamps = js['success_timestamps']
                 state.used_scratch_tokens = js['used_scratch_tokens']
 
             except Exception, ex:
@@ -318,7 +316,7 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
                 logger.debug('Unlocking state file for user %s' % user)
                 lockf(fh, LOCK_UN)
                 raise totpcgi.UserStateError(
-                        'Error parsing the state file for: %s' % user)
+                    'Error parsing the state file for: %s' % user)
 
             fh.seek(0)
         else:
@@ -327,10 +325,9 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
                 fh = open(state_file, 'w')
             except IOError:
                 raise totpcgi.UserStateError(
-                        'Cannot write user state for %s, exiting.' % user)
+                    'Cannot write user state for %s, exiting.' % user)
             logger.debug('Locking state file for user %s' % user)
             lockf(fh, LOCK_EX)
-
 
         # The following condition should never happen, in theory,
         # because we have an exclusive lock on that file. If it does, 
@@ -351,9 +348,9 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
         logger.debug('fh.name=%s' % fh.name)
 
         js = {
-            'fail_timestamps'     : state.fail_timestamps,
-            'success_timestamps'  : state.success_timestamps,
-            'used_scratch_tokens' : state.used_scratch_tokens
+            'fail_timestamps': state.fail_timestamps,
+            'success_timestamps': state.success_timestamps,
+            'used_scratch_tokens': state.used_scratch_tokens
         }
 
         logger.debug('saving state=%s' % js)

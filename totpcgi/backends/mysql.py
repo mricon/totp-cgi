@@ -28,13 +28,16 @@ logger = logging.getLogger('totpcgi')
 dbconn = {}
 userids = {}
 
+
 def db_connect(connect_host, connect_user, connect_password, connect_db):
     global dbconn
 
     if connect_host not in dbconn or not dbconn[connect_host].open:
-        dbconn[connect_host] = MySQLdb.connect( host=connect_host, user=connect_user, passwd=connect_password,db=connect_db)
+        dbconn[connect_host] = MySQLdb.connect(host=connect_host, user=connect_user,
+                                               passwd=connect_password, db=connect_db)
 
     return dbconn[connect_host]
+
 
 def get_user_id(conn, user):
     global userids
@@ -56,6 +59,7 @@ def get_user_id(conn, user):
 
     userids[user] = row[0]
     return userids[user]
+
 
 class GAStateBackend(totpcgi.backends.GAStateBackend):
     def __init__(self, connect_host, connect_user, connect_password, connect_db):
@@ -159,6 +163,7 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
 
         self.conn.commit()
 
+
 class GASecretBackend(totpcgi.backends.GASecretBackend):
     def __init__(self, connect_host, connect_user, connect_password, connect_db):
         totpcgi.backends.GASecretBackend.__init__(self)
@@ -233,8 +238,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
                         (userid, secret, rate_limit_times,
                          rate_limit_seconds, window_size)
                  VALUES (%s, %s, %s, %s, %s)''', 
-                        (userid, secret, gaus.rate_limit[0], gaus.rate_limit[1],
-                             gaus.window_size))
+                    (userid, secret, gaus.rate_limit[0], gaus.rate_limit[1], gaus.window_size))
 
         for token in gaus.scratch_tokens:
             cur.execute('''

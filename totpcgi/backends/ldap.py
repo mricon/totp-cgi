@@ -27,10 +27,11 @@ logger = logging.getLogger('totpcgi')
 class GASecretBackend:
     def __init__(self):
         raise totpcgi.backends.BackendNotSupported(
-                'Secret backend not (yet?) supported by ldap backend engine')
+            'Secret backend not (yet?) supported by ldap backend engine')
 
     def get_user_secret(self, user):
         pass
+
 
 class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
     """ This verifies the pincode by trying to bind to ldap using the 
@@ -41,8 +42,8 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
 
         logger.debug('Using LDAP Pincode backend')
 
-        self.ldap_url    = ldap_url
-        self.ldap_dn     = ldap_dn
+        self.ldap_url = ldap_url
+        self.ldap_dn = ldap_dn
         self.ldap_cacert = ldap_cacert
 
     def verify_user_pincode(self, user, pincode):
@@ -64,14 +65,14 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
 
     def save_user_hashcode(self, user, pincode, makedb=True):
         raise totpcgi.backends.BackendNotSupported(
-                'LDAP backend does not support saving pincodes.')
+            'LDAP backend does not support saving pincodes.')
 
     def delete_user_hashcode(self, user):
         raise totpcgi.backends.BackendNotSupported(
-                'LDAP backend does not support deleting pincodes.')
+            'LDAP backend does not support deleting pincodes.')
+
 
 class GAStateBackend:
     def __init__(self):
         raise totpcgi.backends.BackendNotSupported(
-                'State backend not supported by ldap backend engine')
-
+            'State backend not supported by ldap backend engine')
