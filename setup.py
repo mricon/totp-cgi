@@ -10,14 +10,14 @@ from distutils.core import setup
 def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
-VERSION='0.5.5'
+VERSION='0.6.pre'
 NAME='totpcgi'
 
 setup(
     version=VERSION,
     url='https://github.com/mricon/totp-cgi',
     name=NAME,
-    description='A centralized totp solution based on google-authenticator',
+    description='A centralized hotp/totp solution based on google-authenticator',
     author='Konstantin Ryabitsev',
     author_email='mricon@kernel.org',
     packages=[NAME, "%s.backends" % NAME],

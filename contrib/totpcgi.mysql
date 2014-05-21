@@ -48,6 +48,14 @@ CREATE TABLE used_scratch_tokens (
 GRANT SELECT, INSERT, DELETE ON used_scratch_tokens TO totpcgi;
 GRANT SELECT, INSERT, DELETE ON used_scratch_tokens TO totpcgi_admin;
 
+CREATE TABLE counters (
+  userid  INTEGER NOT NULL REFERENCES users ON DELETE CASCADE,
+  counter INTEGER NOT NULL,
+  CONSTRAINT counters_uniq UNIQUE (userid, counter)
+);
+GRANT SELECT, INSERT, DELETE ON counters TO totpcgi;
+GRANT SELECT, INSERT, DELETE ON counters TO totpcgi_admin;
+
 -- Used by the secrets backend
 
 CREATE TABLE secrets (

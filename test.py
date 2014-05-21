@@ -35,18 +35,22 @@ import crypt
 
 import anydbm
 
-secrets_dir  = 'test/'
+secrets_dir = 'test/'
 pincode_file = 'test/pincodes'
-state_dir    = 'test/state'
+state_dir = 'test/state'
 
 pg_connect_string = ''
 ldap_dn = ''
 ldap_url = ''
 ldap_cacert = ''
+mysql_connect_host = ''
+mysql_connect_user = ''
+mysql_connect_password = ''
+mysql_connect_db = ''
 
-SECRET_BACKEND  = 'File'
+SECRET_BACKEND = 'File'
 PINCODE_BACKEND = 'File'
-STATE_BACKEND   = 'File'
+STATE_BACKEND = 'File'
 
 logger = logging.getLogger('totpcgi')
 logger.setLevel(logging.DEBUG)
@@ -61,10 +65,12 @@ logger.addHandler(ch)
 VALID_SECRET = None
 VALID_SCRATCH_TOKENS = []
 
+
 def db_connect():
     import psycopg2
     conn = psycopg2.connect(pg_connect_string)
     return conn
+
 
 def getBackends():
     import totpcgi
@@ -74,30 +80,35 @@ def getBackends():
     import totpcgi.backends.file
     if STATE_BACKEND == 'File':
         backends.state_backend = totpcgi.backends.file.GAStateBackend(state_dir)
-
     elif STATE_BACKEND == 'pgsql':
         import totpcgi.backends.pgsql
         backends.state_backend = totpcgi.backends.pgsql.GAStateBackend(pg_connect_string)
+    elif STATE_BACKEND == 'mysql':
+        import totpcgi.backends.mysql
+        backends.state_backend = totpcgi.backends.mysql.GAStateBackend(mysql_connect_host, mysql_connect_user,
+                                                                       mysql_connect_password, mysql_connect_db)
 
     if SECRET_BACKEND == 'File':
         backends.secret_backend = totpcgi.backends.file.GASecretBackend(secrets_dir)
     elif SECRET_BACKEND == 'pgsql':
         backends.secret_backend = totpcgi.backends.pgsql.GASecretBackend(pg_connect_string)
+    elif SECRET_BACKEND == 'mysql':
+        backends.secret_backend = totpcgi.backends.mysql.GASecretBackend(mysql_connect_host, mysql_connect_user,
+                                                                         mysql_connect_password, mysql_connect_db)
 
     if PINCODE_BACKEND == 'File':
         backends.pincode_backend = totpcgi.backends.file.GAPincodeBackend(pincode_file)
     elif PINCODE_BACKEND == 'pgsql':
         backends.pincode_backend = totpcgi.backends.pgsql.GAPincodeBackend(pg_connect_string)
+    elif PINCODE_BACKEND == 'mysql':
+        backends.pincode_backend = totpcgi.backends.mysql.GAPincodeBackend(mysql_connect_host, mysql_connect_user,
+                                                                           mysql_connect_password, mysql_connect_db)
     elif PINCODE_BACKEND == 'ldap':
         import totpcgi.backends.ldap
         backends.pincode_backend = totpcgi.backends.ldap.GAPincodeBackend(ldap_url, ldap_dn, ldap_cacert)
 
     return backends
 
-def getCurrentToken(secret):
-    totp = pyotp.TOTP(secret)
-    token = str(totp.now()).zfill(6)
-    return token
 
 def setCustomPincode(pincode, algo='sha256', user='valid', makedb=True, addjunk=False):
     hashcode = totpcgi.utils.hash_pincode(pincode, algo=algo)
@@ -111,7 +122,7 @@ def setCustomPincode(pincode, algo='sha256', user='valid', makedb=True, addjunk=
     if PINCODE_BACKEND == 'File':
         backends.pincode_backend.save_user_hashcode(user, hashcode, makedb=makedb)
 
-    elif PINCODE_BACKEND == 'pgsql':
+    elif PINCODE_BACKEND in ('pgsql', 'mysql'):
         backends.pincode_backend.save_user_hashcode(user, hashcode)
 
     
@@ -120,15 +131,18 @@ def cleanState(user='valid'):
     backends = getBackends()
     backends.state_backend.delete_user_state(user)
 
+
 def setCustomState(state, user='valid'):
     logger.debug('Setting custom state for user %s' % user)
     backends = getBackends()
     backends.state_backend.get_user_state(user)
     backends.state_backend.update_user_state(user, state)
 
+
 def getValidUser():
     backends = getBackends()
     return totpcgi.GAUser('valid', backends)
+
 
 class GATest(unittest.TestCase):
     def setUp(self):
@@ -150,14 +164,14 @@ class GATest(unittest.TestCase):
         backends = getBackends()
         secret = backends.secret_backend.get_user_secret(gau.user)
 
-        self.assertEqual(secret.totp.secret, VALID_SECRET,
-                'Secret read from valid.totp did not match')
+        self.assertEqual(secret.otp.secret, VALID_SECRET,
+                         'Secret read from valid.totp did not match')
         self.assertEqual(gau.user, 'valid', 
-                'User did not match')
+                         'User did not match')
         self.assertEqual(secret.rate_limit, (4, 30),
-                'RATE_LIMIT did not parse correctly')
+                         'RATE_LIMIT did not parse correctly')
         self.assertEqual(secret.window_size, 3,
-                'WINDOW_SIZE did not parse correctly')
+                         'WINDOW_SIZE did not parse correctly')
 
         compare_tokens = []
         for token in VALID_SCRATCH_TOKENS:
@@ -173,7 +187,6 @@ class GATest(unittest.TestCase):
         gau = totpcgi.GAUser('invalid', backends)
         with self.assertRaises(totpcgi.UserSecretError):
             gau.verify_token(555555)
-
 
     def testInvalidUsername(self):
         logger.debug('Running testInvalidUsername')
@@ -200,9 +213,9 @@ class GATest(unittest.TestCase):
         backends = getBackends()
         secret = backends.secret_backend.get_user_secret(gau.user)
 
-        totp = pyotp.TOTP(secret.totp.secret)
+        totp = pyotp.TOTP(secret.otp.secret)
         token = totp.now()
-        self.assertEqual(gau.verify_token(token), 'Valid token used')
+        self.assertEqual(gau.verify_token(token), 'Valid TOTP token used')
 
         # try using it again
         with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'been used once'):
@@ -212,12 +225,51 @@ class GATest(unittest.TestCase):
         with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'been used once'):
             gau.verify_token(token)
 
-    def testWindowSize(self):
+        gau = totpcgi.GAUser('hotp', backends)
+        # Save custom state for HOTP user, as some backends rely on it to trigger HOTP mode
+        state = totpcgi.GAUserState()
+        state.counter = 1
+        setCustomState(state, 'hotp')
+
+        hotp = pyotp.HOTP(secret.otp.secret)
+        token = hotp.at(1)
+        self.assertEqual(gau.verify_token(token), 'Valid HOTP token used')
+
+        # make sure the counter now validates at 2
+        self.assertEqual(gau.verify_token(hotp.at(2)), 'Valid HOTP token used')
+
+        # make sure trying "1" or "2" fails now
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'HOTP token failed to verify'):
+            gau.verify_token(hotp.at(1))
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'HOTP token failed to verify'):
+            gau.verify_token(hotp.at(2))
+
+        # but we're good to go at 3
+        self.assertEqual(gau.verify_token(hotp.at(3)), 'Valid HOTP token used')
+
+        # and we're good to go with 7, which is max window size
+        self.assertEqual(gau.verify_token(hotp.at(7)), 'Valid HOTP token within window size used')
+
+        # Trying with "5" should fail now
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'HOTP token failed to verify'):
+            gau.verify_token(hotp.at(5))
+
+        # but we're good to go at 8
+        self.assertEqual(gau.verify_token(hotp.at(8)), 'Valid HOTP token used')
+
+        # should fail with 13, which is beyond window size of 9+3
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'HOTP token failed to verify'):
+            gau.verify_token(hotp.at(13))
+
+        cleanState('hotp')
+
+
+    def testTOTPWindowSize(self):
         logger.debug('Running testWindowSize')
         gau = getValidUser()
         backends = getBackends()
         secret = backends.secret_backend.get_user_secret(gau.user)
-        totp = pyotp.TOTP(secret.totp.secret)
+        totp = pyotp.TOTP(secret.otp.secret)
 
         # go back until we get the previous token
         timestamp = int(time.time())
@@ -240,9 +292,9 @@ class GATest(unittest.TestCase):
 
         # this should work
         self.assertEqual(gau.verify_token(past_token), 
-                'Valid token within window size used')
+                'Valid TOTP token within window size used')
         self.assertEqual(gau.verify_token(future_token), 
-                'Valid token within window size used')
+                'Valid TOTP token within window size used')
 
         # trying to reuse them should fail
         with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'been used once'):
@@ -256,13 +308,13 @@ class GATest(unittest.TestCase):
         logger.debug('past_token=%s' % past_token)
         logger.debug('future_token=%s' % future_token)
         # this should fail
-        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'Not a valid token'):
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'TOTP token failed to verify'):
             gau.verify_token(past_token)
-        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'Not a valid token'):
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'TOTP token failed to verify'):
             gau.verify_token(future_token)
 
-    def testRateLimit(self):
-        logger.debug('Running testRateLimit')
+    def testTOTPRateLimit(self):
+        logger.debug('Running testTOTPRateLimit')
         
         gau = getValidUser()
 
@@ -271,13 +323,13 @@ class GATest(unittest.TestCase):
         token  = '555555'
 
         # We now fail 4 times consecutively
-        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'Not a valid token'):
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'TOTP token failed to verify'):
             gau.verify_token(token)
-        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'Not a valid token'):
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'TOTP token failed to verify'):
             gau.verify_token(token)
-        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'Not a valid token'):
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'TOTP token failed to verify'):
             gau.verify_token(token)
-        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'Not a valid token'):
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'TOTP token failed to verify'):
             gau.verify_token(token)
 
         # We should now get a rate-limited error
@@ -286,7 +338,7 @@ class GATest(unittest.TestCase):
 
         # Same with a valid token
         with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'Rate-limit'):
-            gau.verify_token(secret.token)
+            gau.verify_token(secret.get_totp_token())
 
         # Make sure we recover from rate-limiting correctly
         old_timestamp = secret.timestamp-(31+(secret.rate_limit[1]*10))
@@ -299,12 +351,69 @@ class GATest(unittest.TestCase):
         ]
         setCustomState(state)
 
-        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'Not a valid token'):
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'TOTP token failed to verify'):
             gau.verify_token(token)
 
         # Valid token should work, too
         setCustomState(state)
-        self.assertEqual(gau.verify_token(secret.token), 'Valid token used')
+        self.assertEqual(gau.verify_token(secret.get_totp_token()), 'Valid TOTP token used')
+
+    def testHOTPRateLimit(self):
+        logger.debug('Running testHOTPRateLimit')
+
+        backends = getBackends()
+        # Save custom state for HOTP user, as some backends rely on it to trigger HOTP mode
+        state = totpcgi.GAUserState()
+        state.counter = 1
+        setCustomState(state, 'hotp')
+
+        gau = totpcgi.GAUser('hotp', backends)
+        secret = backends.secret_backend.get_user_secret(gau.user)
+
+        hotp = pyotp.HOTP(secret.otp.secret)
+        token = hotp.at(1)
+        self.assertEqual(gau.verify_token(token), 'Valid HOTP token used')
+        # counter is now at 2
+
+        token = '555555'
+
+        # We now fail 4 times consecutively
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'HOTP token failed to verify'):
+            gau.verify_token(token)
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'HOTP token failed to verify'):
+            gau.verify_token(token)
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'HOTP token failed to verify'):
+            gau.verify_token(token)
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'HOTP token failed to verify'):
+            gau.verify_token(token)
+
+        # We should now get a rate-limited error
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'Rate-limit'):
+            gau.verify_token(token)
+
+        # Same with a valid token
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'Rate-limit'):
+            gau.verify_token(hotp.at(2))
+
+        # Make sure we recover from rate-limiting correctly
+        old_timestamp = secret.timestamp-(31+(secret.rate_limit[1]*10))
+        state = totpcgi.GAUserState()
+        state.fail_timestamps = [
+            old_timestamp,
+            old_timestamp,
+            old_timestamp,
+            old_timestamp
+        ]
+        state.counter = 2
+        setCustomState(state, 'hotp')
+
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'HOTP token failed to verify'):
+            gau.verify_token(token)
+
+        # Valid token should work, too
+        setCustomState(state, 'hotp')
+        self.assertEqual(gau.verify_token(hotp.at(2)), 'Valid HOTP token used')
+        cleanState('hotp')
         
     def testInvalidToken(self):
         logger.debug('Running testInvalidToken')
@@ -313,14 +422,14 @@ class GATest(unittest.TestCase):
         token = '555555'
 
         logger.debug('Testing with an invalid 6-digit token')
-        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'Not a valid token'):
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'TOTP token failed to verify'):
             gau.verify_token(token)
 
         logger.debug('Test right away with a valid token')
         backends = getBackends()
         secret = backends.secret_backend.get_user_secret(gau.user)
 
-        totp = pyotp.TOTP(secret.totp.secret)
+        totp = pyotp.TOTP(secret.otp.secret)
         validtoken = totp.now()
         with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'been used once'):
             gau.verify_token(validtoken)
@@ -384,7 +493,7 @@ class GATest(unittest.TestCase):
 
         pincode   = 'wakkawakka'
         secret    = backends.secret_backend.get_user_secret(gau.user)
-        tokencode = str(secret.token).zfill(6)
+        tokencode = str(secret.get_totp_token()).zfill(6)
 
         token = pincode + tokencode
 
@@ -415,18 +524,18 @@ class GATest(unittest.TestCase):
             os.utime(pincode_db_file, None)
 
             ret = ga.verify_user_token('valid', token)
-            self.assertEqual(ret, 'Valid token used')
+            self.assertEqual(ret, 'Valid TOTP token used')
 
             cleanState()
 
             logger.debug('Testing with junk at the end')
             setCustomPincode(pincode, makedb=False, addjunk=True)
             ret = ga.verify_user_token('valid', token)
-            self.assertEqual(ret, 'Valid token used')
+            self.assertEqual(ret, 'Valid TOTP token used')
 
             cleanState()
 
-        if PINCODE_BACKEND == 'pgsql':
+        if PINCODE_BACKEND in ('pgsql', 'mysql'):
             backends.pincode_backend.delete_user_hashcode('valid')
             logger.debug('Testing without a user pincode record present')
             with self.assertRaisesRegexp(totpcgi.UserNotFound, 
@@ -434,25 +543,25 @@ class GATest(unittest.TestCase):
                 ga.verify_user_token('valid', token)
 
 
-        if PINCODE_BACKEND in ('pgsql', 'File'):
+        if PINCODE_BACKEND in ('pgsql', 'mysql', 'File'):
             logger.debug('Testing with 1-digit long pincode')
             setCustomPincode('1')
             ret = ga.verify_user_token('valid', '1'+tokencode)
-            self.assertEqual(ret, 'Valid token used')
+            self.assertEqual(ret, 'Valid TOTP token used')
 
             cleanState()
 
             logger.debug('Testing with 2-digit long pincode + valid tokencode')
             setCustomPincode('99')
             ret = ga.verify_user_token('valid', '99'+tokencode)
-            self.assertEqual(ret, 'Valid token used')
+            self.assertEqual(ret, 'Valid TOTP token used')
 
             cleanState()
 
             logger.debug('Testing with 2-digit long pincode + invalid tokencode')
             setCustomPincode('99')
             with self.assertRaisesRegexp(totpcgi.VerifyFailed,
-                'Not a valid token'):
+                'TOTP token failed to verify'):
                 ret = ga.verify_user_token('valid', '99'+'000000')
 
             cleanState()
@@ -460,14 +569,14 @@ class GATest(unittest.TestCase):
             logger.debug('Testing with bcrypt')
             setCustomPincode(pincode, algo='bcrypt')
             ret = ga.verify_user_token('valid', token)
-            self.assertEqual(ret, 'Valid token used')
+            self.assertEqual(ret, 'Valid TOTP token used')
 
             cleanState()
 
             logger.debug('Testing with md5')
             setCustomPincode(pincode, algo='md5')
             ret = ga.verify_user_token('valid', token)
-            self.assertEqual(ret, 'Valid token used')
+            self.assertEqual(ret, 'Valid TOTP token used')
 
             cleanState()
 
@@ -492,7 +601,7 @@ class GATest(unittest.TestCase):
         else:
             raisedmsg = 'Pincode did not match'
 
-        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'Not a valid token'):
+        with self.assertRaisesRegexp(totpcgi.VerifyFailed, 'TOTP token failed to verify'):
             ret = ga.verify_user_token(valid_user, pincode+'00000000')
 
         cleanState()
@@ -516,7 +625,7 @@ class GATest(unittest.TestCase):
 
         logger.debug('Trying valid token with pincode in enforcing')
         ret = ga.verify_user_token(valid_user, token)
-        self.assertEqual(ret, 'Valid token used')
+        self.assertEqual(ret, 'Valid TOTP token used')
         
         cleanState()
 
@@ -539,7 +648,7 @@ class GATest(unittest.TestCase):
 
         logger.debug('Testing with valid pincode but invalid token')
         with self.assertRaisesRegexp(totpcgi.VerifyFailed,
-            'Not a valid token'):
+            'TOTP token failed to verify'):
             ga.verify_user_token(valid_user, pincode+'555555')
 
     def testEncryptedSecret(self):
@@ -585,9 +694,16 @@ if __name__ == '__main__':
     # ldap_url, ldap_dn, ldap_cacert, ldap_user and ldap_password
     if 'ldap_url' in os.environ.keys():
         PINCODE_BACKEND = 'ldap'
-        ldap_url    = os.environ['ldap_url']
-        ldap_dn     = os.environ['ldap_dn']
+        ldap_url = os.environ['ldap_url']
+        ldap_dn = os.environ['ldap_dn']
         ldap_cacert = os.environ['ldap_cacert']
+
+    if 'mysql_connect_host' in os.environ.keys():
+        STATE_BACKEND = SECRET_BACKEND = PINCODE_BACKEND = 'mysql'
+        mysql_connect_host = os.environ['mysql_connect_host']
+        mysql_connect_user = os.environ['mysql_connect_user']
+        mysql_connect_password = os.environ['mysql_connect_password']
+        mysql_connect_db = os.environ['mysql_connect_db']
 
     backends = getBackends()
 
@@ -595,23 +711,33 @@ if __name__ == '__main__':
     gaus = totpcgi.utils.generate_secret(rate_limit=(4, 30))
     backends.secret_backend.save_user_secret('valid', gaus)
 
-    VALID_SECRET = gaus.totp.secret
+    VALID_SECRET = gaus.otp.secret
     VALID_SCRATCH_TOKENS = gaus.scratch_tokens
+
+    # hotp is using HOTP mode
+    gaus.set_hotp(1)
+    backends.secret_backend.save_user_secret('hotp', gaus)
+
+    # switch back to totp for the rest
+    gaus.counter = 0
+    gaus.otp = pyotp.TOTP(VALID_SECRET)
 
     # encrypted-secret user is same as valid, just encrypted
     backends.secret_backend.save_user_secret('encrypted', gaus, 'wakkawakka')
 
     # invalid user (bad secret)
     gaus = totpcgi.utils.generate_secret()
-    gaus.totp.secret = 'WAKKAWAKKA'
+    gaus.otp.secret = 'WAKKAWAKKA'
     backends.secret_backend.save_user_secret('invalid', gaus)
 
     # encrypted-bad (bad encryption)
-    gaus.totp.secret = 'aes256+hmac256$WAKKAWAKKA$WAKKAWAKKA'
+    gaus.otp.secret = 'aes256+hmac256$WAKKAWAKKA$WAKKAWAKKA'
     backends.secret_backend.save_user_secret('encrypted-bad', gaus)
 
     try:
         unittest.main()
     finally:
-        for username in ('valid', 'invalid', 'encrypted', 'encrypted-bad'):
+        for username in ('valid', 'invalid', 'encrypted', 'encrypted-bad', 'hotp'):
+            backends.state_backend.delete_user_state(username)
             backends.secret_backend.delete_user_secret(username)
+            pass

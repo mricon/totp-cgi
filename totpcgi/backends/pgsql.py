@@ -68,6 +68,14 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
         logger.debug('Establishing connection to the database')
         self.conn = db_connect(connect_string)
 
+        logger.debug('Checking if we have the counters table')
+        cur = self.conn.cursor()
+        cur.execute("select exists(select * from information_schema.tables where table_name=%s)", ('counters',))
+        self.has_counters = cur.fetchone()[0]
+
+        if not self.has_counters:
+            logger.info('Counters table not found, assuming pre-0.6 database schema (no HOTP support)')
+
         self.locks = {}
 
     def get_user_state(self, user):
@@ -101,6 +109,17 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
         for (token,) in cur.fetchall():
             state.used_scratch_tokens.append(token)
 
+        # Now try to load counter info, if we have that table
+        if self.has_counters:
+            cur.execute('''
+                SELECT counter
+                  FROM counters
+                 WHERE userid = %s''', (userid,))
+
+            row = cur.fetchone()
+            if row and row[0] > 0:
+                state.counter = row[0]
+
         return state
 
     def update_user_state(self, user, state):
@@ -131,6 +150,12 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
                 INSERT INTO used_scratch_tokens (userid, token)
                      VALUES (%s, %s)''', (userid, token))
 
+        if state.counter > 0 and self.has_counters:
+            cur.execute('DELETE FROM counters WHERE userid=%s', (userid,))
+            cur.execute('''
+                INSERT INTO counters (userid, counter)
+                     VALUES (%s, %s)''', (userid, state.counter))
+
         logger.debug('Unlocking advisory lock for userid=%s' % userid)
         cur.execute('SELECT pg_advisory_unlock(%s)', (userid,))
 
@@ -150,6 +175,11 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
         cur.execute('''
             DELETE FROM used_scratch_tokens
                   WHERE userid=%s''' % (userid,))
+
+        if self.has_counters:
+            cur.execute('''
+                DELETE FROM counters
+                      WHERE userid=%s''' % (userid,))
 
         # If there are no pincodes or secrets entries, then we may as well
         # delete the user record.
@@ -174,6 +204,14 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
 
         logger.debug('Establishing connection to the database')
         self.conn = db_connect(connect_string)
+
+        logger.debug('Checking if we have the counters table')
+        cur = self.conn.cursor()
+        cur.execute("select exists(select * from information_schema.tables where table_name=%s)", ('counters',))
+        self.has_counters = cur.fetchone()[0]
+
+        if not self.has_counters:
+            logger.info('Counters table not found, assuming pre-0.6 database schema (no HOTP support)')
 
     def get_user_secret(self, user, pincode=None):
         cur = self.conn.cursor()
@@ -207,6 +245,19 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
         if window_size is not None:
             gaus.window_size = window_size
 
+        logger.debug('Querying DB for counter info for %s' % user)
+        # Now try to load counter info, if we have that table
+        if self.has_counters:
+            cur.execute('''
+                SELECT c.counter
+                  FROM counters AS c
+                  JOIN users AS u USING (userid)
+                 WHERE u.username = %s''', (user,))
+
+            row = cur.fetchone()
+            if row:
+                gaus.set_hotp(row[0])
+
         # Not loading scratch tokens if using encrypted secret
         if using_encrypted_secret:
             return gaus
@@ -231,7 +282,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
 
         userid = get_user_id(self.conn, user)
 
-        secret = gaus.totp.secret
+        secret = gaus.otp.secret
 
         if pincode is not None:
             secret = totpcgi.utils.encrypt_secret(secret, pincode)

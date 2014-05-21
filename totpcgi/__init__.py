@@ -74,27 +74,89 @@ class GAUserState:
         self.fail_timestamps = []
         self.success_timestamps = []
         self.used_scratch_tokens = []
+        self.counter = 0
 
 
 class GAUserSecret:
     def __init__(self, secret):
+        self.timestamp = int(time.time())
+        self.rate_limit = (3, 30)
+        self.window_size = 3
+        self.scratch_tokens = []
+        self.counter = 0
+
         # This should immediately tell us if there are problems with the
         # secret as read from the file.
         try:
-            self.totp = pyotp.TOTP(secret)
-
-            self.token = self.totp.now()
-            self.timestamp = int(time.time())
+            self.otp = pyotp.TOTP(secret)
+            self.otp.at(self.timestamp)
 
         except Exception, ex:
             raise UserSecretError('Failed to generate totp: %s' % str(ex))
 
-        self.rate_limit = (3, 30)
-        self.window_size = 0
-        self.scratch_tokens = []
+    def set_hotp(self, counter):
+        if isinstance(self.otp, pyotp.totp.TOTP):
+            logger.info('Switching into HOTP mode')
+            self.otp = pyotp.HOTP(self.otp.secret)
 
-    def get_token_at(self, timestamp):
-        return self.totp.at(timestamp)
+        self.counter = counter
+
+    def is_hotp(self):
+        return self.counter > 0
+
+    def get_totp_token(self):
+        return self.otp.at(self.timestamp)
+
+    def get_token_at(self, count):
+        # same method for both TOTP and HOTP, except for TOTP the count is the timestamp
+        return self.otp.at(count)
+
+    def verify_scratch_token(self, token):
+        return token in self.scratch_tokens
+
+    def verify_token(self, token):
+        if self.counter <= 0:
+            logger.debug('Verifying as TOTP')
+            current = self.otp.at(self.timestamp)
+            if token == current:
+                return True, 'Valid TOTP token used'
+            else:
+                # not a valid token right now
+                if self.window_size > 0:
+                    # okay, let's try within the window_size
+                    start = self.timestamp-(self.window_size*10)
+                    end = self.timestamp+(self.window_size*10)+1
+                    logger.debug('start=%s, end=%s' % (start, end))
+
+                    for timestamp in xrange(start, end, 10):
+                        at_token = self.otp.at(timestamp)
+                        logger.debug('timestamp=%s, at_token=%s' % (timestamp, at_token))
+                        if at_token == token:
+                            self.timestamp = timestamp
+                            return True, 'Valid TOTP token within window size used'
+
+            return False, 'TOTP token failed to verify'
+
+        else:
+            logger.debug('Verifying as HOTP')
+            current = self.otp.at(self.counter)
+            if token == current:
+                self.counter += 1
+                logger.info('Incremented counter to %s' % self.counter)
+                return True, 'Valid HOTP token used'
+            else:
+                if self.window_size > 0:
+                    # okay, let's try next window_size tokens
+                    for at_count in xrange(self.counter, self.counter+self.window_size+1, 1):
+                        logger.debug('Trying with counter=%s' % at_count)
+                        at_token = self.otp.at(at_count)
+                        if at_token == token:
+                            logger.info('Incremented counter by %s ticks to %s' %
+                                        (at_count - self.counter, at_count+1))
+                            self.counter = at_count+1
+                            return True, 'Valid HOTP token within window size used'
+
+            return False, 'HOTP token failed to verify'
 
 
 class GAUser:
@@ -130,23 +192,31 @@ class GAUser:
         state = self.backends.state_backend.get_user_state(self.user)
         new_state = GAUserState()
 
+        # grab the counter from the state and modify user secret with latest counter info
+        if state.counter > secret.counter:
+            secret.set_hotp(state.counter)
+
         used_tokens = []
 
-        for timestamp in state.success_timestamps:
-            # trim any timestamps that are older than (30s + WINDOW_SIZE)
-            cutoff = secret.timestamp-(30+(secret.window_size*10))
-
-            if timestamp < cutoff:
-                continue
-
-            at_token = secret.get_token_at(timestamp)
-
-            if at_token not in used_tokens:
-                used_tokens.append(at_token)
-
-            new_state.success_timestamps.append(timestamp)
-
         new_state.used_scratch_tokens = state.used_scratch_tokens
+
+        # We only track used_tokens in TOTP mode, so we don't care to track success_timestamps
+        # when we're using counters instead.
+        if not secret.is_hotp():
+
+            for timestamp in state.success_timestamps:
+                # trim any timestamps that are older than (30s + WINDOW_SIZE)
+                cutoff = secret.timestamp-(30+(secret.window_size*10))
+
+                if timestamp < cutoff:
+                    continue
+
+                at_token = secret.get_token_at(timestamp)
+
+                if at_token not in used_tokens:
+                    used_tokens.append(at_token)
+
+                new_state.success_timestamps.append(timestamp)
 
         # are you being rate-limited right now?
         for timestamp in state.fail_timestamps:
@@ -155,16 +225,15 @@ class GAUser:
             if timestamp < cutoff:
                 continue
 
-            at_token = secret.get_token_at(timestamp)
+            if not secret.is_hotp():
+                at_token = secret.get_token_at(timestamp)
 
-            if at_token not in used_tokens:
-                used_tokens.append(at_token)
+                if at_token not in used_tokens:
+                    used_tokens.append(at_token)
 
             new_state.fail_timestamps.append(timestamp)
 
         logger.debug('used_tokens=%s' % used_tokens)
-
-        used_timestamp = secret.timestamp
 
         if len(new_state.fail_timestamps) >= secret.rate_limit[0]:
             success = (False, 'Rate-limit reached, please try again later')
@@ -187,7 +256,7 @@ class GAUser:
                     # has it been used before?
                     if token in state.used_scratch_tokens:
                         success = (False, 'Scratch-token already used once')
-                    elif token not in secret.scratch_tokens:
+                    elif not secret.verify_scratch_token(token):
                         # we get out early, without updating state, since we
                         # will retry this as a pincode+6-digit token and the
                         # failure will be recorded at that step.
@@ -202,37 +271,20 @@ class GAUser:
                     logger.debug('A regular token is used')
 
                     # has it been used before?
-                    if token in used_tokens:
+                    if not secret.is_hotp() and token in used_tokens:
                         success = (False, 'Token has already been used once')
-                    elif token == secret.token:
-                        success = (True, 'Valid token used')
                     else:
-                        # not a valid token right now
-                        # This can stand being refactored, eh?
-                        success = (False, 'Not a valid token')
-                        if secret.window_size > 0:
-                            # okay, let's try within the window_size
-                            start = secret.timestamp-(secret.window_size*10)
-                            end = secret.timestamp+(secret.window_size*10)+1
-                            logger.debug('start=%s, end=%s' % (start, end))
-                            for timestamp in xrange(start, end, 10):
-                                at_token = secret.get_token_at(timestamp)
-                                logger.debug('timestamp=%s, at_token=%s' %
-                                             (timestamp, at_token))
-                                if at_token == token:
-                                    used_timestamp = timestamp
-                                    success = (True, 
-                                               'Valid token within window size used')
-                                    break
+                        success = secret.verify_token(token)
 
             # Adjust state accordingly
             if success[0] is True:
-                new_state.success_timestamps.append(used_timestamp)
+                new_state.success_timestamps.append(secret.timestamp)
             else:
                 # Add all timestamps that are within the back-window
-                for ts in xrange(used_timestamp, used_timestamp-(secret.window_size*10), -30):
+                for ts in xrange(secret.timestamp, secret.timestamp-(secret.window_size*10), -30):
                     new_state.fail_timestamps.append(ts)
 
+        new_state.counter = secret.counter
         self.backends.state_backend.update_user_state(self.user, new_state)
 
         logger.debug('success=%s' % str(success))

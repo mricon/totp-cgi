@@ -204,8 +204,17 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
                     if 0 < window_size < 3:
                         window_size = 3
                     gaus.window_size = window_size
-
                     logger.debug('window_size=%s' % window_size)
+
+                elif line[2:14] == 'HOTP_COUNTER':
+                    # This will most likely be overriden by user state, but load it up anyway,
+                    # as this will trigger HOTP mode.
+                    try:
+                        gaus.set_hotp(int(line[15:]))
+                    except ValueError:
+                        gaus.set_hotp(1)
+
+                    logger.debug('hotp_counter=%s' % gaus.counter)
 
             # Scratch code tokens are 8-digit
             # We ignore scratch tokens if we're using encrypted secret
@@ -239,7 +248,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
                                      (totp_file, e))
 
         lockf(fh, LOCK_EX)
-        secret = gaus.totp.secret
+        secret = gaus.otp.secret
 
         if pincode is not None:
             secret = totpcgi.utils.encrypt_secret(secret, pincode)
@@ -247,8 +256,11 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
         fh.write('%s\n' % secret)
         fh.write('" RATE_LIMIT %s %s\n' % gaus.rate_limit)
         fh.write('" WINDOW_SIZE %s\n' % gaus.window_size)
-        fh.write('" DISALLOW_REUSE\n')
-        fh.write('" TOTP_AUTH\n')
+        if gaus.is_hotp():
+            fh.write('" HOTP_COUNTER %s\n' % gaus.counter)
+        else:
+            fh.write('" DISALLOW_REUSE\n')
+            fh.write('" TOTP_AUTH\n')
 
         if pincode is None:
             fh.write('\n'.join(gaus.scratch_tokens))
@@ -307,6 +319,9 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
                 state.success_timestamps = js['success_timestamps']
                 state.used_scratch_tokens = js['used_scratch_tokens']
 
+                if 'counter' in js:
+                    state.counter = js['counter']
+
             except Exception, ex:
                 # We fail out of caution, though if someone wanted to 
                 # screw things up, they could have done so without making
@@ -350,7 +365,8 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
         js = {
             'fail_timestamps': state.fail_timestamps,
             'success_timestamps': state.success_timestamps,
-            'used_scratch_tokens': state.used_scratch_tokens
+            'used_scratch_tokens': state.used_scratch_tokens,
+            'counter': state.counter
         }
 
         logger.debug('saving state=%s' % js)
