@@ -74,7 +74,7 @@ class GAUserState:
         self.fail_timestamps = []
         self.success_timestamps = []
         self.used_scratch_tokens = []
-        self.counter = 0
+        self.counter = -1
 
 
 class GAUserSecret:
@@ -83,7 +83,7 @@ class GAUserSecret:
         self.rate_limit = (3, 30)
         self.window_size = 3
         self.scratch_tokens = []
-        self.counter = 0
+        self.counter = -1
 
         # This should immediately tell us if there are problems with the
         # secret as read from the file.
@@ -102,7 +102,7 @@ class GAUserSecret:
         self.counter = counter
 
     def is_hotp(self):
-        return self.counter > 0
+        return self.counter >= 0
 
     def get_totp_token(self):
         return self.otp.at(self.timestamp)
@@ -115,7 +115,7 @@ class GAUserSecret:
         return token in self.scratch_tokens
 
     def verify_token(self, token):
-        if self.counter <= 0:
+        if self.counter < 0:
             logger.debug('Verifying as TOTP')
             current = self.otp.at(self.timestamp)
             if token == current:
@@ -193,6 +193,7 @@ class GAUser:
         new_state = GAUserState()
 
         # grab the counter from the state and modify user secret with latest counter info
+        logger.debug('state.counter=%s, secret.counter=%s' % (state.counter, secret.counter))
         if state.counter > secret.counter:
             secret.set_hotp(state.counter)
 

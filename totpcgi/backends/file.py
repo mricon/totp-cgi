@@ -212,7 +212,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
                     try:
                         gaus.set_hotp(int(line[15:]))
                     except ValueError:
-                        gaus.set_hotp(1)
+                        gaus.set_hotp(0)
 
                     logger.debug('hotp_counter=%s' % gaus.counter)
 

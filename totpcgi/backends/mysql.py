@@ -118,7 +118,7 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
                  WHERE userid = %s''', (userid,))
 
             row = cur.fetchone()
-            if row and row[0] > 0:
+            if row and row[0] >= 0:
                 state.counter = row[0]
 
         return state
@@ -151,7 +151,7 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
                 INSERT INTO used_scratch_tokens (userid, token)
                      VALUES (%s, %s)''', (userid, token))
 
-        if state.counter > 0 and self.has_counters:
+        if state.counter >= 0 and self.has_counters:
             cur.execute('DELETE FROM counters WHERE userid=%s', (userid,))
             cur.execute('''
                 INSERT INTO counters (userid, counter)
