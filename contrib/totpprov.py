@@ -36,8 +36,8 @@ from string import Template
 
 
 def ays():
-    ays = raw_input('Are you sure [y/N]: ')
-    if ays != 'y':
+    inp = raw_input('Are you sure [y/N]: ')
+    if inp != 'y':
         print 'Exiting on user command'
         sys.exit(0)
 
@@ -182,6 +182,9 @@ def generate_user_token(backends, config, args, pincode=None):
 
     gaus = generate_secret(config)
 
+    if config.hotp:
+        gaus.set_hotp(0)
+
     # if we don't need to encrypt the secret, set pincode to None
     encrypt_secret = config.getboolean('secret', 'encrypt_secret')
     if encrypt_secret:
@@ -197,8 +200,16 @@ def generate_user_token(backends, config, args, pincode=None):
     # generate provisioning URI
     tpt = Template(config.get('secret', 'totp_user_mask'))
     totp_user = tpt.safe_substitute(username=user)
-    totp_qr_uri = gaus.totp.provisioning_uri(totp_user)
-    print gaus.totp.provisioning_uri(totp_user)
+    qr_uri = gaus.otp.provisioning_uri(totp_user)
+
+    print 'OTP URI: %s' % qr_uri
+    if gaus.is_hotp():
+        import binascii
+        import base64
+        keyhex = binascii.hexlify(base64.b32decode(gaus.otp.secret))
+        print 'YK commands:'
+        print '(slot 1): ykpersonalize -1 -ooath-hotp -oappend-cr -a%s' % keyhex
+        print '(slot 2): ykpersonalize -2 -ooath-hotp -oappend-cr -a%s' % keyhex
 
     if gaus.scratch_tokens:
         print 'Scratch tokens:'
@@ -217,7 +228,7 @@ def provision_user(backends, config, args):
         print 'Existing data found for user %s. Delete it first.' % user
         sys.exit(1)
 
-    except totpcgi.UserNotFound, ex:
+    except totpcgi.UserNotFound:
         pass
 
     pincode = set_user_pincode(backends, config, args)
@@ -235,13 +246,19 @@ if __name__ == '__main__':
 
     parser = OptionParser(usage=usage, version='0.1')
     parser.add_option('-c', '--config', dest='config_file', 
-            default='/etc/totpcgi/provisioning.conf',
-            help='Path to provisioning.conf (%default)')
+                      default='/etc/totpcgi/provisioning.conf',
+                      help='Path to provisioning.conf (%default)')
+    parser.add_option('', '--hotp', dest='hotp', action='store_true',
+                      default=False,
+                      help='Generate HOTP tokens (default=%default)')
 
     (opts, args) = parser.parse_args()
 
     config = ConfigParser.RawConfigParser()
     config.read(opts.config_file)
+
+    # it's dirty, but stick hotp switch into the config object
+    config.hotp = opts.hotp
 
     backends = totpcgi.backends.Backends()
 
