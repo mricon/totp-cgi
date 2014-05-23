@@ -228,14 +228,15 @@ class GATest(unittest.TestCase):
         gau = totpcgi.GAUser('hotp', backends)
         # Save custom state for HOTP user, as some backends rely on it to trigger HOTP mode
         state = totpcgi.GAUserState()
-        state.counter = 1
+        state.counter = 0
         setCustomState(state, 'hotp')
 
         hotp = pyotp.HOTP(secret.otp.secret)
-        token = hotp.at(1)
+        token = hotp.at(0)
         self.assertEqual(gau.verify_token(token), 'Valid HOTP token used')
 
-        # make sure the counter now validates at 2
+        # make sure the counter now validates at 1 and 2
+        self.assertEqual(gau.verify_token(hotp.at(1)), 'Valid HOTP token used')
         self.assertEqual(gau.verify_token(hotp.at(2)), 'Valid HOTP token used')
 
         # make sure trying "1" or "2" fails now
@@ -715,11 +716,11 @@ if __name__ == '__main__':
     VALID_SCRATCH_TOKENS = gaus.scratch_tokens
 
     # hotp is using HOTP mode
-    gaus.set_hotp(1)
+    gaus.set_hotp(0)
     backends.secret_backend.save_user_secret('hotp', gaus)
 
     # switch back to totp for the rest
-    gaus.counter = 0
+    gaus.counter = -1
     gaus.otp = pyotp.TOTP(VALID_SECRET)
 
     # encrypted-secret user is same as valid, just encrypted
