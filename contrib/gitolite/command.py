@@ -1,0 +1,553 @@
+#!/usr/bin/python -tt
+__author__ = 'mricon'
+
+import logging
+import os
+import sys
+import anyjson
+
+import totpcgi
+import totpcgi.backends
+import totpcgi.backends.file
+import totpcgi.utils
+
+import datetime
+import dateutil
+import dateutil.parser
+import dateutil.tz
+
+from string import Template
+
+import syslog
+syslog.openlog('gl-2fa', syslog.LOG_PID, syslog.LOG_AUTH)
+
+# default basic logger. We override it later.
+logger = logging.getLogger(__name__)
+
+# You need to change this to reflect your environment
+GL_2FA_COMMAND = 'ssh git@gitolite.kernel.org 2fa'
+HELP_DOC_LINK = 'https://example.com'
+
+# Set to False to disallow yubikey (HOTP) enrolment
+ALLOW_YUBIKEY = True
+
+# This will allow anyone to use "override" as the 2-factor token
+# Obviously, this should only be used during initial debugging
+# and testing and then set to false.
+ALLOW_BYPASS_OVERRIDE = False
+
+# In the TOTP case, the window size is the time drift between the user's device
+# and the server. A window size of 17 means 17*10 seconds, or in other words,
+# we'll accept any tokencodes that were valid within 170 seconds before now, and
+# 170 seconds after now.
+# In the HOTP case, discrepancy between the counter on the device and the counter
+# on the server is virtually guaranteed (accidental button presses on the yubikey,
+# authentication failures, etc), so the window size indicates how many tokens we will
+# try in addition to the current one. The setting of 30 is sane and is not likely to
+# lock someone out.
+TOTP_WINDOW_SIZE = 17
+HOTP_WINDOW_SIZE = 30
+
+# First value is the number of times. Second value is the number of seconds.
+# So, "3, 30" means "3 falures within 30 seconds"
+RATE_LIMIT = (3, 30)
+
+# Google Authenticator and other devices default to key length of 80 bits, while
+# for yubikeys the length must be 160 bits. I suggest you leave these as-is.
+TOTP_KEY_LENGTH = 80
+HOTP_KEY_LENGTH = 160
+
+# This identifies the token in the user's TOTP app
+TOTP_USER_MASK = '$username@kernel.org'
+
+# GeoIP-city database location. Download one from
+# http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz and put into
+# GL_ADMIN_BASE/2fa/
+GEOIP_CITY_DB = os.path.join(os.environ['GL_ADMIN_BASE'], '2fa/GeoLiteCity.dat')
+
+
+def print_help_link():
+    print
+    print('If you need more help, please see the following link:')
+    print('    %s' % HELP_DOC_LINK)
+    print
+
+
+def get_geoip_crc(ipaddr):
+    import GeoIP
+
+    if os.path.exists(GEOIP_CITY_DB):
+        logger.debug('Opening geoip db in %s' % GEOIP_CITY_DB)
+        gi = GeoIP.open(GEOIP_CITY_DB, GeoIP.GEOIP_STANDARD)
+    else:
+        logger.debug('%s does not exist, using basic geoip db' % GEOIP_CITY_DB)
+        gi = GeoIP.new(GeoIP.GEOIP_MEMORY_CACHE)
+
+    ginfo = gi.record_by_addr(ipaddr)
+
+    if ginfo is not None:
+        city = region_name = country_code = 'Unknown'
+
+        if ginfo['city'] is not None:
+            city = unicode(ginfo['city'], 'iso-8859-1')
+        if ginfo['region_name'] is not None:
+            region_name = unicode(ginfo['region_name'], 'iso-8859-1')
+        if ginfo['country_code'] is not None:
+            country_code = unicode(ginfo['country_code'], 'iso-8859-1')
+
+        crc = u'%s, %s, %s' % (city, region_name, country_code)
+
+    else:
+        # try just the country code, then
+        crc = gi.country_code_by_addr(ipaddr)
+        if not crc:
+            return None
+        crc = unicode(crc, 'iso-8859-1')
+
+    return crc
+
+
+def load_authorized_ips():
+    # The authorized ips file has the following structure:
+    # {
+    #   'IP_ADDR': {
+    #       'added': RFC_8601_DATETIME,
+    #       'expires': RFC_8601_DATETIME,
+    #       'whois': whois information about the IP at the time of recording,
+    #       'geoip': geoip information about the IP at the time of recording,
+    #  }
+    #
+    # It is stored in GL_ADMIN_BASE/2fa/validations/GL_USER.js
+
+    user = os.environ['GL_USER']
+    val_dir = os.path.join(os.environ['GL_ADMIN_BASE'], '2fa/validations')
+    if not os.path.exists(val_dir):
+        os.makedirs(val_dir)
+        logger.debug('Created val_dir in %s' % val_dir)
+
+    valfile = os.path.join(val_dir, '%s.js' % user)
+
+    logger.debug('Loading authorized ips from %s' % valfile)
+    valdata = {}
+    if os.access(valfile, os.R_OK):
+        try:
+            fh = open(valfile, 'r')
+            jdata = fh.read()
+            fh.close()
+            valdata = anyjson.deserialize(jdata)
+        except:
+            logger.critical('Validations file exists, but could not be parsed!')
+            logger.critical('All previous validations have been lost, starting fresh.')
+    return valdata
+
+
+def store_authorized_ips(valdata):
+    user = os.environ['GL_USER']
+    val_dir = os.path.join(os.environ['GL_ADMIN_BASE'], '2fa/validations')
+    valfile = os.path.join(val_dir, '%s.js' % user)
+    jdata = anyjson.serialize(valdata)
+    fh = open(valfile, 'w')
+    fh.write(jdata)
+    fh.close()
+    logger.debug('Wrote new validations file in %s' % valfile)
+
+
+def store_validation(remote_ip, hours):
+    valdata = load_authorized_ips()
+
+    utc = dateutil.tz.tzutc()
+    now_time = datetime.datetime.now(utc).replace(microsecond=0)
+    expires = now_time + datetime.timedelta(hours=hours)
+
+    logger.info('Adding IP address %s until %s' % (remote_ip, expires.strftime('%c %Z')))
+    valdata[remote_ip] = {
+        'added': now_time.isoformat(sep=' '),
+        'expires': expires.isoformat(sep=' '),
+    }
+
+    # Try to lookup whois info if cymruwhois is available
+    try:
+        import cymruwhois
+        cym = cymruwhois.Client()
+        res = cym.lookup(remote_ip)
+        if res.owner and res.cc:
+            whois = "%s/%s\n" % (res.owner, res.cc)
+            valdata[remote_ip]['whois'] = whois
+            logger.info('Whois information for %s: %s' % (remote_ip, whois))
+    except:
+        pass
+
+    try:
+        geoip = get_geoip_crc(remote_ip)
+        if geoip is not None:
+            valdata[remote_ip]['geoip'] = geoip
+            logger.info('GeoIP information for %s: %s' % (remote_ip, geoip))
+    except:
+        pass
+
+    store_authorized_ips(valdata)
+
+
+def generate_user_token(backends, mode):
+    if mode == 'totp':
+        gaus = totpcgi.utils.generate_secret(
+            RATE_LIMIT, TOTP_WINDOW_SIZE, 5, bs=TOTP_KEY_LENGTH)
+
+    else:
+        gaus = totpcgi.utils.generate_secret(
+            RATE_LIMIT, HOTP_WINDOW_SIZE, 5, bs=HOTP_KEY_LENGTH)
+        gaus.set_hotp(0)
+
+    user = os.environ['GL_USER']
+    backends.secret_backend.save_user_secret(user, gaus, None)
+    # purge all old state, as it's now obsolete
+    backends.state_backend.delete_user_state(user)
+
+    logger.info('New token generated for user %s' % user)
+    remote_ip = os.environ['SSH_CONNECTION'].split()[0]
+    syslog.syslog(
+        syslog.LOG_NOTICE,
+        'Enrolled: user=%s, host=%s, mode=%s' % (user, remote_ip, mode)
+    )
+
+    if mode == 'totp':
+        # generate provisioning URI
+        tpt = Template(TOTP_USER_MASK)
+        totp_user = tpt.safe_substitute(username=user)
+        qr_uri = gaus.otp.provisioning_uri(totp_user)
+        import urllib
+        print('Please open an INCOGNITO/PRIVATE MODE window in your browser')
+        print('and then paste the following URL:')
+        print(
+            'https://www.google.com/chart?chs=200x200&chld=M|0&cht=qr&chl=%s' %
+            urllib.quote_plus(qr_uri))
+        print('')
+        print('Scan the resulting QR code with your TOTP app, such as')
+        print('FreeOTP (recommended), Google Authenticator, Authy, or others.')
+
+    else:
+        import binascii
+        import base64
+        keyhex = binascii.hexlify(base64.b32decode(gaus.otp.secret))
+        print('Please make sure "ykpersonalize" has been installed.')
+        print('Insert your yubikey and, as root, run:')
+        print('    unset HISTFILE')
+        print('    ykpersonalize -1 -ooath-hotp -oappend-cr -a%s' % keyhex)
+        print('')
+
+    if gaus.scratch_tokens:
+        print('Please write down/print the following 8-digit scratch tokens.')
+        print('If you lose your device or temporarily have no access to it, you')
+        print('will be able to use these tokens for one-time bypass.')
+        print('')
+        print('Scratch tokens:')
+        print('\n'.join(gaus.scratch_tokens))
+
+    print
+
+    print('Now run the following command to verify that all went well')
+
+    if mode == 'totp':
+        print('    %s val [token]' % GL_2FA_COMMAND)
+    else:
+        print('    %s val [yubkey button press]' % GL_2FA_COMMAND)
+
+    print_help_link()
+
+
+def enroll(backends):
+    proceed = False
+    mode = 'totp'
+
+    if ALLOW_YUBIKEY and len(sys.argv) <= 2:
+        logger.critical('Enrolment mode not specified.')
+    elif ALLOW_YUBIKEY:
+        if sys.argv[2] not in ('totp', 'yubikey'):
+            logger.critical('%s is not a valid enrollment mode' % sys.argv[2])
+        else:
+            mode = sys.argv[2]
+            proceed = True
+    else:
+        proceed = True
+
+    if not proceed:
+        print('Please specify whether you are enrolling a yubikey or a TOTP phone app')
+        print('Examples:')
+        print('    %s enroll yubikey' % GL_2FA_COMMAND)
+        print('    %s enroll totp' % GL_2FA_COMMAND)
+        print_help_link()
+        sys.exit(1)
+
+    logger.info('%s enrollment mode selected' % mode)
+
+    user = os.environ['GL_USER']
+
+    try:
+        try:
+            backends.secret_backend.get_user_secret(user)
+        except totpcgi.UserSecretError:
+            pass
+
+        logger.critical('User %s already enrolled' % user)
+        print('Looks like you are already enrolled. If you want to re-issue your token,')
+        print('you will first need to remove your currently active one.')
+        print
+        print('If you have access to your current device or 8-digit scratch codes, run:')
+        print('    unenroll [token]')
+        print_help_link()
+        sys.exit(1)
+
+    except totpcgi.UserNotFound:
+        pass
+
+    generate_user_token(backends, mode)
+
+
+def unenroll(backends):
+    token = sys.argv[2]
+    user = os.environ['GL_USER']
+    remote_ip = os.environ['SSH_CONNECTION'].split()[0]
+
+    ga = totpcgi.GoogleAuthenticator(backends)
+
+    try:
+        status = ga.verify_user_token(user, token)
+    except Exception, ex:
+        if ALLOW_BYPASS_OVERRIDE and token == 'override':
+            status = "%s uses 'override'. It's super effective!" % user
+            syslog.syslog(
+                syslog.LOG_NOTICE, 'OVERRIDE USED: user=%s, host=%s'
+            )
+        else:
+            logger.critical('Failed to validate token.')
+            print('If using a phone app, please wait for token to change before trying again.')
+            syslog.syslog(
+                syslog.LOG_NOTICE,
+                'Failure: user=%s, host=%s, message=%s' % (user, remote_ip, str(ex))
+            )
+            print_help_link()
+            sys.exit(1)
+
+    syslog.syslog(
+        syslog.LOG_NOTICE,
+        'Success: user=%s, host=%s, message=%s' % (user, remote_ip, status)
+    )
+    logger.info(status)
+
+    # Okay, deleting
+    backends.secret_backend.delete_user_secret(user)
+    # purge all old state, as it's now obsolete
+    backends.state_backend.delete_user_state(user)
+    # Expire all validations
+    inval(expire_all=True)
+
+    logger.info('You have been successfully unenrolled.')
+
+
+def val(backends, hours=24):
+    if len(sys.argv) <= 2:
+        logger.critical('Missing tokencode.')
+        print('You need to pass the token code as the last argument. E.g.:')
+        print('    %s val [token]' % GL_2FA_COMMAND)
+        print_help_link()
+        sys.exit(1)
+
+    token = sys.argv[2]
+    user = os.environ['GL_USER']
+    remote_ip = os.environ['SSH_CONNECTION'].split()[0]
+
+    ga = totpcgi.GoogleAuthenticator(backends)
+
+    try:
+        status = ga.verify_user_token(user, token)
+    except Exception, ex:
+        if ALLOW_BYPASS_OVERRIDE and token == 'override':
+            status = "%s uses 'override'. It's super effective!" % user
+            syslog.syslog(
+                syslog.LOG_NOTICE, 'OVERRIDE USED: user=%s, host=%s'
+            )
+        else:
+            logger.critical('Failed to validate token.')
+            print('If using a phone app, please wait for token to change before trying again.')
+            syslog.syslog(
+                syslog.LOG_NOTICE,
+                'Failure: user=%s, host=%s, message=%s' % (user, remote_ip, str(ex))
+            )
+            print_help_link()
+            sys.exit(1)
+
+    syslog.syslog(
+        syslog.LOG_NOTICE,
+        'Success: user=%s, host=%s, message=%s' % (user, remote_ip, status)
+    )
+    logger.info(status)
+
+    store_validation(remote_ip, hours)
+
+
+def list_val(active_only=True):
+    valdata = load_authorized_ips()
+    if active_only:
+        utc = dateutil.tz.tzutc()
+        now_time = datetime.datetime.now(utc)
+
+        for authorized_ip in valdata.keys():
+            exp_time = dateutil.parser.parse(valdata[authorized_ip]['expires'])
+
+            if now_time > exp_time:
+                del valdata[authorized_ip]
+
+    if valdata:
+        # anyjson doesn't let us indent
+        import json
+        print(json.dumps(valdata, indent=4))
+        if active_only:
+            print('Listed non-expired entries only. Run "list-val all" to list all.')
+
+
+def inval(expire_all=False):
+    valdata = load_authorized_ips()
+    utc = dateutil.tz.tzutc()
+    now_time = datetime.datetime.now(utc).replace(microsecond=0)
+    new_exp_time = now_time - datetime.timedelta(seconds=1)
+
+    to_expire = []
+
+    if expire_all:
+        for authorized_ip in valdata:
+            exp_time = dateutil.parser.parse(valdata[authorized_ip]['expires'])
+
+            if exp_time > now_time:
+                to_expire.append(authorized_ip)
+
+    else:
+        if sys.argv[2] == 'current':
+            inval_ip = os.environ['SSH_CONNECTION'].split()[0]
+        else:
+            inval_ip = sys.argv[2]
+
+        if inval_ip not in valdata.keys():
+            logger.info('Did not find %s in the list of authorized IPs.' % inval_ip)
+        else:
+            to_expire.append(inval_ip)
+
+    if to_expire:
+        for inval_ip in to_expire:
+            exp_time = dateutil.parser.parse(valdata[inval_ip]['expires'])
+
+            if exp_time > now_time:
+                logger.info('Force-expired %s.' % inval_ip)
+                valdata[inval_ip]['expires'] = new_exp_time.isoformat(sep=' ')
+            else:
+                logger.info('%s was already expired.' % inval_ip)
+
+        store_authorized_ips(valdata)
+
+    list_val(active_only=True)
+
+
+def main():
+    global logger
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+    formatter = logging.Formatter(
+        "[%s] " % os.environ['GL_USER'] + "%(asctime)s - %(levelname)s - %(message)s")
+
+    # We log alongside GL_LOGFILE and follow Gitolite's log structure
+    (logdir, logname) = os.path.split(os.environ['GL_LOGFILE'])
+    logfile = os.path.join(logdir, '2fa-command-%s' % logname)
+    ch = logging.FileHandler(logfile)
+    ch.setFormatter(formatter)
+
+    if '2FA_LOG_DEBUG' in os.environ.keys():
+        loglevel = logging.DEBUG
+    else:
+        loglevel = logging.INFO
+
+    ch.setLevel(loglevel)
+    logger.addHandler(ch)
+
+    # Only CRITICAL goes to console
+    ch = logging.StreamHandler()
+
+    formatter = logging.Formatter('%(message)s')
+    ch.setFormatter(formatter)
+    ch.setLevel(logging.INFO)
+    logger.addHandler(ch)
+
+    backends = totpcgi.backends.Backends()
+
+    # We only use file backends
+    secrets_dir = os.path.join(os.environ['GL_ADMIN_BASE'], '2fa/secrets')
+    state_dir = os.path.join(os.environ['GL_ADMIN_BASE'], '2fa/state')
+    logger.debug('secrets_dir=%s' % secrets_dir)
+    logger.debug('state_dir=%s' % state_dir)
+
+    # Create those two dirs if they don't exist
+    if not os.path.exists(secrets_dir):
+        os.makedirs(secrets_dir)
+        logger.info('Created %s' % secrets_dir)
+    if not os.path.exists(state_dir):
+        os.makedirs(state_dir)
+        logger.info('Created %s' % state_dir)
+
+    backends.secret_backend = totpcgi.backends.file.GASecretBackend(secrets_dir)
+    backends.state_backend = totpcgi.backends.file.GAStateBackend(state_dir)
+
+    command = sys.argv[1]
+
+    if command == 'enroll':
+        enroll(backends)
+    elif command == 'unenroll':
+        if len(sys.argv) <= 2:
+            logger.critical('Missing authorization token.')
+            print('Please use your current token code to unenroll.')
+            print('You may also use a one-time 8-digit code for the same purpose.')
+            print('E.g.: %s unenroll [token]' % GL_2FA_COMMAND)
+            sys.exit(1)
+        unenroll(backends)
+
+    elif command == 'val':
+        val(backends)
+    elif command == 'val-for-days':
+        if len(sys.argv) <= 2:
+            logger.critical('Missing number of days to keep the validation.')
+            sys.exit(1)
+        try:
+            days = int(sys.argv[2])
+        except ValueError:
+            logger.critical('The number of days should be an integer.')
+            sys.exit(1)
+
+        if days > 30 or days < 1:
+            logger.critical('The number of days must be a number between 1 and 30.')
+            sys.exit(1)
+
+        hours = days * 24
+
+        # shift token into 2nd position
+        del sys.argv[2]
+        val(backends, hours=hours)
+    elif command == 'list-val':
+        if len(sys.argv) > 2 and sys.argv[2] == 'all':
+            list_val(active_only=False)
+        else:
+            list_val(active_only=True)
+    elif command == 'inval':
+        if len(sys.argv) <= 2:
+            logger.critical('You need to provide an IP address to invalidate.')
+            logger.critical('You may use "current" to invalidate your current IP address.')
+            sys.exit(1)
+        inval()
+
+
+if __name__ == '__main__':
+    if 'GL_USER' not in os.environ:
+        sys.stderr.write('Please run me from gitolite hooks')
+        sys.exit(1)
+
+    if 'SSH_CONNECTION' not in os.environ:
+        sys.stderr.write('This only works when accessed over SSH')
+        sys.exit(1)
+
+    main()
