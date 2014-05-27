@@ -19,13 +19,11 @@ import dateutil.tz
 from string import Template
 
 import syslog
-syslog.openlog('gl-2fa', syslog.LOG_PID, syslog.LOG_AUTH)
 
-# default basic logger. We override it later.
-logger = logging.getLogger(__name__)
+#--------------- CHANGE ME TO REFLECT YOUR ENVIRONMENT -------------------
 
 # You need to change this to reflect your environment
-GL_2FA_COMMAND = 'ssh git@gitolite.kernel.org 2fa'
+GL_2FA_COMMAND = 'ssh git@example.com 2fa'
 HELP_DOC_LINK = 'https://example.com'
 
 # Set to False to disallow yubikey (HOTP) enrolment
@@ -58,19 +56,33 @@ TOTP_KEY_LENGTH = 80
 HOTP_KEY_LENGTH = 160
 
 # This identifies the token in the user's TOTP app
-TOTP_USER_MASK = '$username@kernel.org'
+TOTP_USER_MASK = '$username@example.com'
 
-# GeoIP-city database location. Download one from
-# http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz and put into
-# GL_ADMIN_BASE/2fa/
+# GeoIP-city database location.
+# This is only currently used as a sort of a reminder to the users, so when they list
+# their current validations using list-val, it can help them figure out where they
+# previously authorized from.
+# You can download the City database from
+# http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.xz and put
+# into GL_ADMIN_BASE/2fa/ (uncompress first). If the code doesn't find it, it'll
+# try to use the basic GeoIP country information. If that fails, it'll just
+# quitely omit GeoIP data.
 GEOIP_CITY_DB = os.path.join(os.environ['GL_ADMIN_BASE'], '2fa/GeoLiteCity.dat')
+
+# Identify ourselves in syslog as "gl-2fa"
+syslog.openlog('gl-2fa', syslog.LOG_PID, syslog.LOG_AUTH)
+
+#-------------------------------------------------------------------------
+
+# default basic logger. We override it later.
+logger = logging.getLogger(__name__)
 
 
 def print_help_link():
-    print
+    print('')
     print('If you need more help, please see the following link:')
     print('    %s' % HELP_DOC_LINK)
-    print
+    print('')
 
 
 def get_geoip_crc(ipaddr):
@@ -216,6 +228,7 @@ def generate_user_token(backends, mode):
         totp_user = tpt.safe_substitute(username=user)
         qr_uri = gaus.otp.provisioning_uri(totp_user)
         import urllib
+        print('')
         print('Please open an INCOGNITO/PRIVATE MODE window in your browser')
         print('and then paste the following URL:')
         print(
@@ -229,8 +242,10 @@ def generate_user_token(backends, mode):
         import binascii
         import base64
         keyhex = binascii.hexlify(base64.b32decode(gaus.otp.secret))
+        print('')
         print('Please make sure "ykpersonalize" has been installed.')
-        print('Insert your yubikey and, as root, run:')
+        print('Insert your yubikey and, as root, run the following command')
+        print('to provision the secret into slot 1 (use -2 for slot 2):')
         print('    unset HISTFILE')
         print('    ykpersonalize -1 -ooath-hotp -oappend-cr -a%s' % keyhex)
         print('')
@@ -291,7 +306,7 @@ def enroll(backends):
         logger.critical('User %s already enrolled' % user)
         print('Looks like you are already enrolled. If you want to re-issue your token,')
         print('you will first need to remove your currently active one.')
-        print
+        print('')
         print('If you have access to your current device or 8-digit scratch codes, run:')
         print('    unenroll [token]')
         print_help_link()
@@ -335,10 +350,12 @@ def unenroll(backends):
     logger.info(status)
 
     # Okay, deleting
+    logger.info('Removing the secrets file.')
     backends.secret_backend.delete_user_secret(user)
     # purge all old state, as it's now obsolete
+    logger.info('Cleaning up state files.')
     backends.state_backend.delete_user_state(user)
-    # Expire all validations
+    logger.info('Expiring all validations.')
     inval(expire_all=True)
 
     logger.info('You have been successfully unenrolled.')
@@ -413,6 +430,13 @@ def inval(expire_all=False):
 
     to_expire = []
 
+    if sys.argv[2] == 'myip':
+        inval_ip = os.environ['SSH_CONNECTION'].split()[0]
+    elif sys.argv[2] == 'all':
+        expire_all = True
+    else:
+        inval_ip = sys.argv[2]
+
     if expire_all:
         for authorized_ip in valdata:
             exp_time = dateutil.parser.parse(valdata[authorized_ip]['expires'])
@@ -421,11 +445,6 @@ def inval(expire_all=False):
                 to_expire.append(authorized_ip)
 
     else:
-        if sys.argv[2] == 'current':
-            inval_ip = os.environ['SSH_CONNECTION'].split()[0]
-        else:
-            inval_ip = sys.argv[2]
-
         if inval_ip not in valdata.keys():
             logger.info('Did not find %s in the list of authorized IPs.' % inval_ip)
         else:
@@ -536,7 +555,8 @@ def main():
     elif command == 'inval':
         if len(sys.argv) <= 2:
             logger.critical('You need to provide an IP address to invalidate.')
-            logger.critical('You may use "current" to invalidate your current IP address.')
+            logger.critical('You may use "myip" to invalidate your current IP address.')
+            logger.critical('You may also use "all" to invalidate ALL currently active IP addresses.')
             sys.exit(1)
         inval()
 

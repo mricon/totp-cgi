@@ -10,8 +10,8 @@
 %define fixfiles_dirs %{_localstatedir}/www/totpcgi %{_localstatedir}/www/totpcgi-provisioning %{_localstatedir}/lib/totpcgi %{_sysconfdir}/totpcgi
 
 Name:       totpcgi
-Version:    0.5.5
-Release:    1%{?dist}
+Version:    0.6
+Release:    0.pre.1%{?dist}
 Summary:    A centralized totp solution based on google-authenticator
 
 License:    GPLv2+
@@ -206,6 +206,9 @@ fi
 
 
 %changelog
+* Thu May 22 2014 Konstantin Ryabitsev <mricon@kernel.org> - 0.6.0-0.pre.1
+- New pre 0.6
+
 * Fri Sep 20 2013 Konstantin Ryabitsev <mricon@kernel.org> - 0.5.5-1
 - New version 0.5.5 with new features
 

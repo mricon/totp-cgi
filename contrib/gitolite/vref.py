@@ -6,15 +6,17 @@ import os
 import sys
 import anyjson
 
-# default basic logger. We override it later.
-logger = logging.getLogger(__name__)
+#--------------- CHANGE ME TO REFLECT YOUR ENVIRONMENT -------------------
 
-# You need to change this to reflect your environment
-GL_2FA_COMMAND = 'ssh git@gitolite.kernel.org 2fa'
+# What should people run to invoke the 2fa command?
+GL_2FA_COMMAND = 'ssh git@example.com 2fa'
+# Where does helpful documentation live?
 HELP_DOC_LINK = 'https://example.com'
 
-# Set this to "pass" to allow opt-in 2fa authentication
-MISSING_SECRET = 'fail'
+#-------------------------------------------------------------------------
+
+# default basic logger. We override it later.
+logger = logging.getLogger(__name__)
 
 
 def gl_fail_exit():
@@ -30,7 +32,8 @@ def print_help_link():
 
 
 def how_to_enroll():
-    print('You need to enroll with our 2-factor authentication setup before you can push')
+    print('You will need to enroll with 2-factor authentication')
+    print('before you can push to this repository.')
     print_help_link()
 
 
@@ -105,8 +108,9 @@ def vref_verify():
         '%s.totp' % os.environ['GL_USER'])
 
     if not os.path.exists(secret_file):
-        if MISSING_SECRET == 'pass':
-            logger.info('User not enrolled with 2fa, allowing to proceed.')
+        # See if we were called as "VREF/2fa/optin"
+        if sys.argv[7][-6:] == '/optin':
+            logger.info('User not enrolled with 2fa, but /optin is set. Allowing the push.')
             sys.exit(0)
         else:
             logger.critical('User not enrolled with 2-factor authentication.')
@@ -145,7 +149,9 @@ def vref_verify():
     expires = authorized_ips[matching]['expires']
     logger.debug('Validation for %s expires on %s' % (matching, expires))
     import datetime
-    import dateutil, dateutil.parser
+    import dateutil
+    import dateutil.parser
+    import dateutil.tz
 
     exp_time = dateutil.parser.parse(expires)
     utc = dateutil.tz.tzutc()
