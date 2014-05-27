@@ -513,6 +513,10 @@ def main():
     backends.secret_backend = totpcgi.backends.file.GASecretBackend(secrets_dir)
     backends.state_backend = totpcgi.backends.file.GAStateBackend(state_dir)
 
+    if len(sys.argv) < 2:
+        logger.critical('Incomplete command specified.')
+        print_help_link()
+        sys.exit(1)
     command = sys.argv[1]
 
     if command == 'enroll':
