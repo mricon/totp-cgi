@@ -10,7 +10,7 @@
 %define fixfiles_dirs %{_localstatedir}/www/totpcgi %{_localstatedir}/www/totpcgi-provisioning %{_localstatedir}/lib/totpcgi %{_sysconfdir}/totpcgi
 
 Name:       totpcgi
-Version:    0.6
+Version:    0.6.0
 Release:    0.pre.1%{?dist}
 Summary:    A centralized totp solution based on google-authenticator
 
