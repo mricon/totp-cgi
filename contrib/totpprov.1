@@ -1,6 +1,6 @@
 .\" Man page generated from reStructuredText.
 .
-.TH TOTPPROV 1 "2013-09-20" "0.5.5" ""
+.TH TOTPPROV 1 "2013-09-20" "0.6.pre" ""
 .SH NAME
 totpprov \- Simple provisioning script for totpcgi
 .
@@ -52,6 +52,9 @@ show program\(aqs version number and exit
 .B \-h\fP,\fB  \-\-help
 show this help message and exit
 .TP
+.B \-\-hotp
+generate HOTP token instead of TOTP
+.TP
 .BI \-c \ CONFIG_FILE\fP,\fB \ \-\-config\fB= CONFIG_FILE
 Path to provisioning.conf
 (Default: /etc/totpcgi/provisioning.conf)
@@ -97,6 +100,7 @@ To provision a user:
 .nf
 .ft C
 totpprov provision\-user bobafett
+totpprov \-\-hotp provision\-user bobafett
 .ft P
 .fi
 .UNINDENT

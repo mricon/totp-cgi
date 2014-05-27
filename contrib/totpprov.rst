@@ -9,7 +9,7 @@ Simple provisioning script for totpcgi
 :Date:      2013-09-20
 :Copyright: Linux Foundation and contributors
 :License:   GPLv2+
-:Version:   0.5.5
+:Version:   0.6.pre
 :Manual section: 1
 
 SYNOPSIS
@@ -26,6 +26,7 @@ OPTIONS
 -------
   --version             show program's version number and exit
   -h, --help            show this help message and exit
+  --hotp                generate HOTP token instead of TOTP
   -c CONFIG_FILE, --config=CONFIG_FILE
                         Path to provisioning.conf
                         (Default: /etc/totpcgi/provisioning.conf)
@@ -57,6 +58,7 @@ EXAMPLES
 To provision a user::
 
     totpprov provision-user bobafett
+    totpprov --hotp provision-user bobafett
 
 To delete a user::
 
