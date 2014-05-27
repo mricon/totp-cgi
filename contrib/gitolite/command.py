@@ -134,7 +134,7 @@ def load_authorized_ips():
     user = os.environ['GL_USER']
     val_dir = os.path.join(os.environ['GL_ADMIN_BASE'], '2fa/validations')
     if not os.path.exists(val_dir):
-        os.makedirs(val_dir)
+        os.makedirs(val_dir, 0700)
         logger.debug('Created val_dir in %s' % val_dir)
 
     valfile = os.path.join(val_dir, '%s.js' % user)
@@ -504,10 +504,10 @@ def main():
 
     # Create those two dirs if they don't exist
     if not os.path.exists(secrets_dir):
-        os.makedirs(secrets_dir)
+        os.makedirs(secrets_dir, 0700)
         logger.info('Created %s' % secrets_dir)
     if not os.path.exists(state_dir):
-        os.makedirs(state_dir)
+        os.makedirs(state_dir, 0700)
         logger.info('Created %s' % state_dir)
 
     backends.secret_backend = totpcgi.backends.file.GASecretBackend(secrets_dir)
