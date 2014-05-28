@@ -229,8 +229,15 @@ def generate_user_token(backends, mode):
         qr_uri = gaus.otp.provisioning_uri(totp_user)
         import urllib
         print('')
-        print('Please open an INCOGNITO/PRIVATE MODE window in your browser')
-        print('and then paste the following URL:')
+        print('Please make sure "qrencode" is installed.')
+        print('Run the following commands to display your QR code:')
+        print('    unset HISTFILE')
+        print('    echo "%s" | qrencode -t ANSI -o -' % qr_uri)
+        print('')
+        print('If that does not work or if you do not have access to')
+        print('qrencode or a similar QR encoding tool, then you may')
+        print('open an INCOGNITO/PRIVATE MODE window in your browser')
+        print('and paste the following URL:')
         print(
             'https://www.google.com/chart?chs=200x200&chld=M|0&cht=qr&chl=%s' %
             urllib.quote_plus(qr_uri))
