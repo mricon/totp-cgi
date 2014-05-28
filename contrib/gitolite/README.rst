@@ -273,9 +273,9 @@ to the 8-digit scratch tokens, you will need to manually unenroll them.
 
 Manually unenrolling
 ~~~~~~~~~~~~~~~~~~~~
-* Delete .gitolite/2fa/secrets/[username].totp
-* Delete .gitolite/2fa/state/[username].totp
-* Delete .gitolite/2fa/validations/[username].totp
+* Delete .gitolite/2fa/secrets/[username].*
+* Delete .gitolite/2fa/state/[username].*
+* Delete .gitolite/2fa/validations/[username].*
 
 Alternatively, issue a onetime 8-digit token and add it at the bottom of
 their .gitolite/2fa/secrets/[username].totp, then pass the token to the
