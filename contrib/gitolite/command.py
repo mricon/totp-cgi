@@ -232,7 +232,7 @@ def generate_user_token(backends, mode):
         print('Please make sure "qrencode" is installed.')
         print('Run the following commands to display your QR code:')
         print('    unset HISTFILE')
-        print('    echo -n "%s" | qrencode -tANSI -m1 -o-' % qr_uri)
+        print('    qrencode -tANSI -m1 -o- "%s"' % qr_uri)
         print('')
         print('If that does not work or if you do not have access to')
         print('qrencode or a similar QR encoding tool, then you may')
