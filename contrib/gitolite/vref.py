@@ -124,7 +124,7 @@ def vref_verify():
     remote_ip = chunks[0]
     authorized_ips = load_authorized_ips()
 
-    logger.info('Checking if %s has been previously validated' % remote_ip)
+    logger.debug('Checking if %s has been previously validated' % remote_ip)
 
     # First compare as strings, as this is much faster
     matching = None
@@ -164,7 +164,7 @@ def vref_verify():
         how_to_validate()
         gl_fail_exit()
 
-    logger.info('Successfully validated remote IP %s' % matching)
+    logger.info('Remote IP %s is valid' % matching)
 
 
 if __name__ == '__main__':

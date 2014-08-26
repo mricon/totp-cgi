@@ -408,6 +408,47 @@ def val(backends, hours=24):
 
     store_validation(remote_ip, hours)
 
+def isval():
+    authorized_ips = load_authorized_ips()
+    remote_ip = os.environ['SSH_CONNECTION'].split()[0]
+
+    matching = None
+    if remote_ip not in authorized_ips.keys():
+        import netaddr
+        # We can't rely on strings, as ipv6 has more than one way to represent the same IP address, e.g.:
+        # 2001:4f8:1:10:0:1991:8:25 and 2001:4f8:1:10::1991:8:25
+        for authorized_ip in authorized_ips.keys():
+            if netaddr.IPAddress(remote_ip) == netaddr.IPAddress(authorized_ip):
+                # Found it
+                matching = authorized_ip
+                break
+    else:
+        matching = remote_ip
+
+    if matching is None:
+        print("False")
+        sys.exit(1)
+
+    # Okay, but is it still valid?
+    expires = authorized_ips[matching]['expires']
+    logger.debug('Validation for %s expires on %s' % (matching, expires))
+    import datetime
+    import dateutil
+    import dateutil.parser
+    import dateutil.tz
+
+    exp_time = dateutil.parser.parse(expires)
+    utc = dateutil.tz.tzutc()
+    now_time = datetime.datetime.now(utc)
+    logger.debug('exp_time: %s' % exp_time)
+    logger.debug('now_time: %s' % now_time)
+
+    if now_time > exp_time:
+        print("False")
+        sys.exit(1)
+
+    print("True")
+    sys.exit(0)
 
 def list_val(active_only=True):
     valdata = load_authorized_ips()
@@ -521,10 +562,9 @@ def main():
     backends.state_backend = totpcgi.backends.file.GAStateBackend(state_dir)
 
     if len(sys.argv) < 2:
-        logger.critical('Incomplete command specified.')
-        print_help_link()
-        sys.exit(1)
-    command = sys.argv[1]
+        command = 'help'
+    else:
+        command = sys.argv[1]
 
     if command == 'enroll':
         enroll(backends)
@@ -570,6 +610,32 @@ def main():
             logger.critical('You may also use "all" to invalidate ALL currently active IP addresses.')
             sys.exit(1)
         inval()
+    elif command == 'isval':
+        isval()
+    elif command == 'help':
+        # Print out a summary of commands
+        print('Command summary:')
+        print('---------------|-----------------------------------------------')
+        print('enroll [mode]  | Enroll with 2-factor authentication')
+        print('               | (mode=totp or yubikey)')
+        print('---------------|-----------------------------------------------')
+        print('val [tkn]      | Validate your current IP address for 24 hours')
+        print('               | (tkn means your currently displayed 2fa code')
+        print('---------------|-----------------------------------------------')
+        print('val-for-days   | Validate your current IP address for NN days')
+        print(' [NN] [tkn]    | (max=30)')
+        print('---------------|-----------------------------------------------')
+        print('list-val [all] | List currently validated IP addresses')
+        print('               | ("all" lists expired addresses as well)')
+        print('---------------|-----------------------------------------------')
+        print('inval [ip]     | Force-invalidate a specific IP address')
+        print('               | (can be "myip" or "all")')
+        print('---------------|-----------------------------------------------')
+        print('isval          | Checks if your current IP is valid and returns')
+        print('               | "True" or "False" (also sets error code)')
+        print('---------------|-----------------------------------------------')
+        print('unenroll [tkn] | Unenroll from 2-factor authentication')
+        print_help_link()
 
 
 if __name__ == '__main__':

@@ -102,7 +102,7 @@ repositories at once, e.g.::
 
     repo @all
 
-.. _`customizing gitolite`: http://gitolite.com/gitolite/cust.html
+.. _`customizing gitolite`: http://gitolite.com/gitolite/non-core.html
 
 Client behaviour
 ~~~~~~~~~~~~~~~~
