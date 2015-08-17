@@ -199,8 +199,12 @@ def generate_user_token(backends, config, args, pincode=None):
     print 'New token generated for user %s' % user
     # generate provisioning URI
     tpt = Template(config.get('secret', 'totp_user_mask'))
+    try:
+        totp_issuer = config.get('secret', 'totp_issuer')
+    except ConfigParser.NoOptionError:
+        totp_issuer = None
     totp_user = tpt.safe_substitute(username=user)
-    qr_uri = gaus.otp.provisioning_uri(totp_user)
+    qr_uri = gaus.otp.provisioning_uri(totp_user, issuer_name=totp_issuer)
 
     print 'OTP URI: %s' % qr_uri
     if gaus.is_hotp():

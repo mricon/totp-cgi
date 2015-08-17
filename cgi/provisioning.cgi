@@ -36,6 +36,11 @@ from StringIO import StringIO
 
 from string import Template
 
+try:
+    from urllib.parse import quote
+except ImportError:
+    from urllib import quote
+
 if len(sys.argv) > 1:
     # blindly assume it's the config file
     config_file = sys.argv[1]
@@ -155,12 +160,16 @@ def show_reissue_page(config, user):
 def show_totp_page(config, user, gaus):
     # generate provisioning URI
     tpt = Template(config.get('secret', 'totp_user_mask'))
+    try:
+        totp_issuer = config.get('secret', 'totp_issuer')
+    except ConfigParser.NoOptionError:
+        totp_issuer = None
     totp_user = tpt.safe_substitute(username=user)
-    totp_qr_uri = gaus.otp.provisioning_uri(totp_user)
+    totp_qr_uri = gaus.otp.provisioning_uri(totp_user, issuer_name=totp_issuer)
 
     action_url = config.get('secret', 'action_url')
     
-    qrcode_embed = '<img src="%s?qrcode=%s"/>' % (action_url, totp_qr_uri)
+    qrcode_embed = '<img src="%s?qrcode=%s"/>' % (action_url, quote(totp_qr_uri))
 
     templates_dir = config.get('secret', 'templates_dir')
     fh = open(os.path.join(templates_dir, 'totp.html'))
