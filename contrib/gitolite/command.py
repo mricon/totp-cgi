@@ -16,6 +16,8 @@ import dateutil
 import dateutil.parser
 import dateutil.tz
 
+import netaddr
+
 from string import Template
 
 import syslog
@@ -72,6 +74,11 @@ GEOIP_CITY_DB = os.path.join(os.environ['GL_ADMIN_BASE'], '2fa/GeoLiteCity.dat')
 # Identify ourselves in syslog as "gl-2fa"
 syslog.openlog('gl-2fa', syslog.LOG_PID, syslog.LOG_AUTH)
 
+# When allowing networks via val-subnet, this is the maximum network size
+# to allow (CIDR style, meaning /24, /16, etc)
+# E.g. MAX_CIDR_SIZE = 12 means we will not allow x.x.0.0/11, but /13 is ok
+MAX_CIDR_SIZE = 12
+
 #-------------------------------------------------------------------------
 
 # default basic logger. We override it later.
@@ -84,6 +91,33 @@ def print_help_link():
     print('    %s' % HELP_DOC_LINK)
     print('')
 
+
+def is_expired(expires):
+    exp_time = dateutil.parser.parse(expires)
+    utc = dateutil.tz.tzutc()
+    now_time = datetime.datetime.now(utc)
+    logger.debug('exp_time: %s' % exp_time)
+    logger.debug('now_time: %s' % now_time)
+
+    if now_time > exp_time:
+        logger.debug('Validation expired')
+        return True
+
+    return False
+
+
+def is_authorized_ip(ip, authorized_ips):
+    # Since authorized_ips can list both ips and networks,
+    # we always use network-aware matching
+    myipaddr = netaddr.IPAddress(ip)
+    for authorized_ip in authorized_ips.keys():
+        if myipaddr in netaddr.IPNetwork(authorized_ip):
+            # Is it expired?
+            expires = authorized_ips[authorized_ip]['expires']
+            if not is_expired(expires):
+                return True
+
+    return False
 
 def get_geoip_crc(ipaddr):
     import GeoIP
@@ -164,38 +198,45 @@ def store_authorized_ips(valdata):
     logger.debug('Wrote new validations file in %s' % valfile)
 
 
-def store_validation(remote_ip, hours):
+def store_validation(validated_ip, hours):
     valdata = load_authorized_ips()
+
+    # Get rid of any previously validated IPs matching this one (or this range)
+    mynetwork = netaddr.IPNetwork(validated_ip)
+    for authorized_ip in valdata.keys():
+        if netaddr.IPNetwork(authorized_ip) in mynetwork:
+            del valdata[authorized_ip]
 
     utc = dateutil.tz.tzutc()
     now_time = datetime.datetime.now(utc).replace(microsecond=0)
     expires = now_time + datetime.timedelta(hours=hours)
 
-    logger.info('Adding IP address %s until %s' % (remote_ip, expires.strftime('%c %Z')))
-    valdata[remote_ip] = {
+    logger.info('Adding IP address %s until %s' % (validated_ip, expires.strftime('%c %Z')))
+    valdata[validated_ip] = {
         'added': now_time.isoformat(sep=' '),
         'expires': expires.isoformat(sep=' '),
     }
 
-    # Try to lookup whois info if cymruwhois is available
-    try:
-        import cymruwhois
-        cym = cymruwhois.Client()
-        res = cym.lookup(remote_ip)
-        if res.owner and res.cc:
-            whois = "%s/%s\n" % (res.owner, res.cc)
-            valdata[remote_ip]['whois'] = whois
-            logger.info('Whois information for %s: %s' % (remote_ip, whois))
-    except:
-        pass
+    if mynetwork.size == 1:
+        # Try to lookup whois info if cymruwhois is available
+        try:
+            import cymruwhois
+            cym = cymruwhois.Client()
+            res = cym.lookup(validated_ip)
+            if res.owner and res.cc:
+                whois = "%s/%s\n" % (res.owner, res.cc)
+                valdata[validated_ip]['whois'] = whois
+                logger.info('Whois information for %s: %s' % (validated_ip, whois))
+        except:
+            pass
 
-    try:
-        geoip = get_geoip_crc(remote_ip)
-        if geoip is not None:
-            valdata[remote_ip]['geoip'] = geoip
-            logger.info('GeoIP information for %s: %s' % (remote_ip, geoip))
-    except:
-        pass
+        try:
+            geoip = get_geoip_crc(validated_ip)
+            if geoip is not None:
+                valdata[validated_ip]['geoip'] = geoip
+                logger.info('GeoIP information for %s: %s' % (validated_ip, geoip))
+        except:
+            pass
 
     store_authorized_ips(valdata)
 
@@ -368,7 +409,7 @@ def unenroll(backends):
     logger.info('You have been successfully unenrolled.')
 
 
-def val(backends, hours=24):
+def val(backends, hours=24, authorize_ip=None):
     if len(sys.argv) <= 2:
         logger.critical('Missing tokencode.')
         print('You need to pass the token code as the last argument. E.g.:')
@@ -406,60 +447,28 @@ def val(backends, hours=24):
     )
     logger.info(status)
 
-    store_validation(remote_ip, hours)
+    if authorize_ip is None:
+        authorize_ip = remote_ip
+
+    store_validation(authorize_ip, hours)
 
 def isval():
     authorized_ips = load_authorized_ips()
     remote_ip = os.environ['SSH_CONNECTION'].split()[0]
 
-    matching = None
-    if remote_ip not in authorized_ips.keys():
-        import netaddr
-        # We can't rely on strings, as ipv6 has more than one way to represent the same IP address, e.g.:
-        # 2001:4f8:1:10:0:1991:8:25 and 2001:4f8:1:10::1991:8:25
-        for authorized_ip in authorized_ips.keys():
-            if netaddr.IPAddress(remote_ip) == netaddr.IPAddress(authorized_ip):
-                # Found it
-                matching = authorized_ip
-                break
-    else:
-        matching = remote_ip
+    if is_authorized_ip(remote_ip, authorized_ips):
+        print("True")
+        sys.exit(0)
 
-    if matching is None:
-        print("False")
-        sys.exit(1)
-
-    # Okay, but is it still valid?
-    expires = authorized_ips[matching]['expires']
-    logger.debug('Validation for %s expires on %s' % (matching, expires))
-    import datetime
-    import dateutil
-    import dateutil.parser
-    import dateutil.tz
-
-    exp_time = dateutil.parser.parse(expires)
-    utc = dateutil.tz.tzutc()
-    now_time = datetime.datetime.now(utc)
-    logger.debug('exp_time: %s' % exp_time)
-    logger.debug('now_time: %s' % now_time)
-
-    if now_time > exp_time:
-        print("False")
-        sys.exit(1)
-
-    print("True")
-    sys.exit(0)
+    print("False")
+    sys.exit(1)
 
 def list_val(active_only=True):
     valdata = load_authorized_ips()
     if active_only:
-        utc = dateutil.tz.tzutc()
-        now_time = datetime.datetime.now(utc)
-
         for authorized_ip in valdata.keys():
-            exp_time = dateutil.parser.parse(valdata[authorized_ip]['expires'])
-
-            if now_time > exp_time:
+            expires = valdata[authorized_ip]['expires']
+            if is_expired(expires):
                 del valdata[authorized_ip]
 
     if valdata:
@@ -493,10 +502,10 @@ def inval(expire_all=False):
                 to_expire.append(authorized_ip)
 
     else:
-        if inval_ip not in valdata.keys():
-            logger.info('Did not find %s in the list of authorized IPs.' % inval_ip)
-        else:
-            to_expire.append(inval_ip)
+        myipaddr = netaddr.IPAddress(inval_ip)
+        for authorized_ip in valdata.keys():
+            if myipaddr in netaddr.IPNetwork(authorized_ip):
+                to_expire.append(authorized_ip)
 
     if to_expire:
         for inval_ip in to_expire:
@@ -509,6 +518,9 @@ def inval(expire_all=False):
                 logger.info('%s was already expired.' % inval_ip)
 
         store_authorized_ips(valdata)
+    else:
+        if not expire_all:
+            logger.info('Did not find %s in the list of authorized IPs.' % inval_ip)
 
     list_val(active_only=True)
 
@@ -598,11 +610,45 @@ def main():
         # shift token into 2nd position
         del sys.argv[2]
         val(backends, hours=hours)
+
+    elif command == 'val-subnet':
+        myip = os.environ['SSH_CONNECTION'].split()[0]
+        if len(sys.argv) <= 2:
+            logger.critical('Missing the subnet mask.')
+            logger.critical('Try the following to find out your subnet mask:')
+            logger.critical('    whois -h whois.cymru.com " -p %s"' % myip)
+            sys.exit(1)
+        netmask = sys.argv[2].lstrip('/')
+        try:
+            netmask = int(netmask)
+        except ValueError:
+            logger.critical('The subnet mask is invalid.')
+            sys.exit(1)
+
+        if netmask < MAX_CIDR_SIZE:
+            logger.critical('Largest allowed subnet is /%s' % MAX_CIDR_SIZE)
+            sys.exit(1)
+
+        try:
+            mynetwork = netaddr.IPNetwork('%s/%s' % (myip, netmask))
+            authorize_ip = str(mynetwork.cidr)
+        except netaddr.AddrFormatError:
+            logger.critical('Tne subnet mask is invalid.')
+            sys.exit(1)
+
+        # Limit authorization to 24 hours
+        hours = 24
+
+        # shift token into 2nd position
+        del sys.argv[2]
+        val(backends, hours=hours, authorize_ip=authorize_ip)
+
     elif command == 'list-val':
         if len(sys.argv) > 2 and sys.argv[2] == 'all':
             list_val(active_only=False)
         else:
             list_val(active_only=True)
+
     elif command == 'inval':
         if len(sys.argv) <= 2:
             logger.critical('You need to provide an IP address to invalidate.')
@@ -613,6 +659,7 @@ def main():
     elif command == 'isval':
         isval()
     elif command == 'help':
+        myip = os.environ['SSH_CONNECTION'].split()[0]
         # Print out a summary of commands
         print('Command summary:')
         print('---------------|-----------------------------------------------')
@@ -624,6 +671,10 @@ def main():
         print('---------------|-----------------------------------------------')
         print('val-for-days   | Validate your current IP address for NN days')
         print(' [NN] [tkn]    | (max=30)')
+        print('---------------|-----------------------------------------------')
+        print('val-subnet     | Validate a subnet instead of IP for 24 hours')
+        print(' [/xx] [tkn]   | (max subnet size=/%s)' % MAX_CIDR_SIZE)
+        print('               | try: whois -h whois.cymru.com " -p %s"' % myip)
         print('---------------|-----------------------------------------------')
         print('list-val [all] | List currently validated IP addresses')
         print('               | ("all" lists expired addresses as well)')
