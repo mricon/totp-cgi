@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 import anyjson
+import netaddr
 
 import datetime
 import dateutil
@@ -170,7 +171,7 @@ def vref_verify():
         how_to_validate()
         gl_fail_exit()
 
-    logger.info('Remote IP %s is valid' % matching)
+    logger.info('Remote IP %s is valid' % remote_ip)
 
 
 if __name__ == '__main__':

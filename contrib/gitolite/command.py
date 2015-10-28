@@ -459,11 +459,9 @@ def isval():
     remote_ip = os.environ['SSH_CONNECTION'].split()[0]
 
     if is_authorized_ip(remote_ip, authorized_ips):
-        print("True")
-        sys.exit(0)
+        return True
 
-    print("False")
-    sys.exit(1)
+    return False
 
 
 def list_val(active_only=True):
@@ -655,12 +653,22 @@ def main():
         val(backends, hours=hours, authorize_ip=authorize_ip)
 
     elif command == 'list-val':
+        if not isval():
+            logger.critical('This command only works from a whitelisted IP')
+            print_help_link()
+            sys.exit(1)
+
         if len(sys.argv) > 2 and sys.argv[2] == 'all':
             list_val(active_only=False)
         else:
             list_val(active_only=True)
 
     elif command == 'inval':
+        if not isval():
+            logger.critical('This command only works from a whitelisted IP')
+            print_help_link()
+            sys.exit(1)
+
         if len(sys.argv) <= 2:
             logger.critical('You need to provide an IP address to invalidate.')
             logger.critical('You may use "myip" to invalidate your current IP address.')
@@ -670,10 +678,13 @@ def main():
         inval()
 
     elif command == 'isval':
-        isval()
+        if isval():
+            print("True")
+            sys.exit(0)
+        print("False")
+        sys.exit(1)
 
     elif command == 'help':
-        myip = os.environ['SSH_CONNECTION'].split()[0]
         # Print out a summary of commands
         print('Command summary:')
         print('---------------|-----------------------------------------------')
