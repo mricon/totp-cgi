@@ -119,6 +119,7 @@ def is_authorized_ip(ip, authorized_ips):
 
     return False
 
+
 def get_geoip_crc(ipaddr):
     import GeoIP
 
@@ -452,6 +453,7 @@ def val(backends, hours=24, authorize_ip=None):
 
     store_validation(authorize_ip, hours)
 
+
 def isval():
     authorized_ips = load_authorized_ips()
     remote_ip = os.environ['SSH_CONNECTION'].split()[0]
@@ -462,6 +464,7 @@ def isval():
 
     print("False")
     sys.exit(1)
+
 
 def list_val(active_only=True):
     valdata = load_authorized_ips()
@@ -489,6 +492,11 @@ def inval(expire_all=False):
 
     if sys.argv[2] == 'myip':
         inval_ip = os.environ['SSH_CONNECTION'].split()[0]
+    elif sys.argv[2] == 'all' and len(sys.argv) > 3 and sys.argv[3] == 'purge':
+        valdata = {}
+        store_authorized_ips(valdata)
+        logger.info('All entries purged. You can verify with "list-val all".')
+        return
     elif sys.argv[2] == 'all':
         expire_all = True
     else:
@@ -566,6 +574,7 @@ def main():
     if not os.path.exists(secrets_dir):
         os.makedirs(secrets_dir, 0700)
         logger.info('Created %s' % secrets_dir)
+
     if not os.path.exists(state_dir):
         os.makedirs(state_dir, 0700)
         logger.info('Created %s' % state_dir)
@@ -580,6 +589,7 @@ def main():
 
     if command == 'enroll':
         enroll(backends)
+
     elif command == 'unenroll':
         if len(sys.argv) <= 2:
             logger.critical('Missing authorization token.')
@@ -591,6 +601,7 @@ def main():
 
     elif command == 'val':
         val(backends)
+
     elif command == 'val-for-days':
         if len(sys.argv) <= 2:
             logger.critical('Missing number of days to keep the validation.')
@@ -636,8 +647,8 @@ def main():
             logger.critical('Tne subnet mask is invalid.')
             sys.exit(1)
 
-        # Limit authorization to 24 hours
-        hours = 24
+        # Limit authorization to 8 hours
+        hours = 8
 
         # shift token into 2nd position
         del sys.argv[2]
@@ -654,10 +665,13 @@ def main():
             logger.critical('You need to provide an IP address to invalidate.')
             logger.critical('You may use "myip" to invalidate your current IP address.')
             logger.critical('You may also use "all" to invalidate ALL currently active IP addresses.')
+            logger.critical('Use "all purge" to purge all expired validations from history.')
             sys.exit(1)
         inval()
+
     elif command == 'isval':
         isval()
+
     elif command == 'help':
         myip = os.environ['SSH_CONNECTION'].split()[0]
         # Print out a summary of commands
@@ -674,13 +688,12 @@ def main():
         print('---------------|-----------------------------------------------')
         print('val-subnet     | Validate a subnet instead of IP for 24 hours')
         print(' [/xx] [tkn]   | (max subnet size=/%s)' % MAX_CIDR_SIZE)
-        print('               | try: whois -h whois.cymru.com " -p %s"' % myip)
         print('---------------|-----------------------------------------------')
         print('list-val [all] | List currently validated IP addresses')
         print('               | ("all" lists expired addresses as well)')
         print('---------------|-----------------------------------------------')
         print('inval [ip]     | Force-invalidate a specific IP address')
-        print('               | (can be "myip" or "all")')
+        print('               | (can be "myip" or "all" or "all purge")')
         print('---------------|-----------------------------------------------')
         print('isval          | Checks if your current IP is valid and returns')
         print('               | "True" or "False" (also sets error code)')
