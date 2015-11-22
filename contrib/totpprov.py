@@ -27,6 +27,8 @@ import totpcgi
 import totpcgi.backends
 import totpcgi.utils
 
+import pyotp
+
 import getpass
 
 import syslog
@@ -334,7 +336,7 @@ if __name__ == '__main__':
         generate_user_token(backends, config, args)
 
     elif command == 'provision-user':
-        print 'Provisioning new TOTP user %s' % args[1]
+        print 'Provisioning new user %s' % args[1]
         ays()
         provision_user(backends, config, args)
 
