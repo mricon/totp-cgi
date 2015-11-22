@@ -1,10 +1,10 @@
 
-## <summary>policy for httpd_totpcgi_script</summary>
+## <summary>policy for totpcgi_script</summary>
 
 
 ########################################
 ## <summary>
-##	Transition to httpd_totpcgi_script.
+##	Transition to totpcgi_script.
 ## </summary>
 ## <param name="domain">
 ## <summary>
@@ -12,18 +12,18 @@
 ## </summary>
 ## </param>
 #
-interface(`httpd_totpcgi_script_domtrans',`
+interface(`totpcgi_script_domtrans',`
 	gen_require(`
-		type httpd_totpcgi_script_t, httpd_totpcgi_script_exec_t;
+		type totpcgi_script_t, totpcgi_script_exec_t;
 	')
 
 	corecmd_search_bin($1)
-	domtrans_pattern($1, httpd_totpcgi_script_exec_t, httpd_totpcgi_script_t)
+	domtrans_pattern($1, totpcgi_script_exec_t, totpcgi_script_t)
 ')
 
 ########################################
 ## <summary>
-##	Transition to httpd_totpcgi_provisioning_script.
+##	Transition to totpcgi_provisioning_script.
 ## </summary>
 ## <param name="domain">
 ## <summary>
@@ -31,18 +31,18 @@ interface(`httpd_totpcgi_script_domtrans',`
 ## </summary>
 ## </param>
 #
-interface(`httpd_totpcgi_provisioning_script_domtrans',`
+interface(`totpcgi_provisioning_script_domtrans',`
 	gen_require(`
-		type httpd_totpcgi_provisioning_script_t, httpd_totpcgi_provisioning_script_exec_t;
+		type totpcgi_provisioning_script_t, totpcgi_provisioning_script_exec_t;
 	')
 
 	corecmd_search_bin($1)
-	domtrans_pattern($1, httpd_totpcgi_provisioning_script_exec_t, httpd_totpcgi_provisioning_script_t)
+	domtrans_pattern($1, totpcgi_provisioning_script_exec_t, totpcgi_provisioning_script_t)
 ')
 
 ########################################
 ## <summary>
-##	Read httpd_totpcgi conf files.
+##	Read totpcgi conf files.
 ## </summary>
 ## <param name="domain">
 ##	<summary>
@@ -50,19 +50,19 @@ interface(`httpd_totpcgi_provisioning_script_domtrans',`
 ##	</summary>
 ## </param>
 #
-interface(`httpd_totpcgi_read_conf_files',`
+interface(`totpcgi_read_conf_files',`
 	gen_require(`
-		type httpd_totpcgi_etc_t;
+		type totpcgi_etc_t;
 	')
 
-	allow $1 httpd_totpcgi_etc_t:file read_file_perms;
-	allow $1 httpd_totpcgi_etc_t:dir list_dir_perms;
+	allow $1 totpcgi_etc_t:file read_file_perms;
+	allow $1 totpcgi_etc_t:dir list_dir_perms;
 	files_search_etc($1)
 ')
 
 ########################################
 ## <summary>
-##	Read httpd_totpcgi private conf files.
+##	Read totpcgi private conf files.
 ## </summary>
 ## <param name="domain">
 ##	<summary>
@@ -70,19 +70,19 @@ interface(`httpd_totpcgi_read_conf_files',`
 ##	</summary>
 ## </param>
 #
-interface(`httpd_totpcgi_read_private_conf_files',`
+interface(`totpcgi_read_private_conf_files',`
 	gen_require(`
-		type httpd_totpcgi_private_etc_t;
+		type totpcgi_private_etc_t;
 	')
 
-	allow $1 httpd_totpcgi_private_etc_t:file read_file_perms;
-	allow $1 httpd_totpcgi_etc_t:dir list_dir_perms;
+	allow $1 totpcgi_private_etc_t:file read_file_perms;
+	allow $1 totpcgi_etc_t:dir list_dir_perms;
 	files_search_etc($1)
 ')
 
 ########################################
 ## <summary>
-##	Manage httpd_totpcgi conf files.
+##	Manage totpcgi conf files.
 ## </summary>
 ## <param name="domain">
 ##	<summary>
@@ -90,18 +90,18 @@ interface(`httpd_totpcgi_read_private_conf_files',`
 ##	</summary>
 ## </param>
 #
-interface(`httpd_totpcgi_manage_conf_files',`
+interface(`totpcgi_manage_conf_files',`
 	gen_require(`
-		type httpd_totpcgi_etc_t;
+		type totpcgi_etc_t;
 	')
 
-	manage_files_pattern($1, httpd_totpcgi_etc_t, httpd_totpcgi_etc_t)
+	manage_files_pattern($1, totpcgi_etc_t, totpcgi_etc_t)
 	files_search_etc($1)
 ')
 
 ########################################
 ## <summary>
-##	Manage httpd_totpcgi private conf files.
+##	Manage totpcgi private conf files.
 ## </summary>
 ## <param name="domain">
 ##	<summary>
@@ -109,20 +109,20 @@ interface(`httpd_totpcgi_manage_conf_files',`
 ##	</summary>
 ## </param>
 #
-interface(`httpd_totpcgi_manage_private_conf_files',`
+interface(`totpcgi_manage_private_conf_files',`
 	gen_require(`
-		type httpd_totpcgi_private_etc_t;
-        type httpd_totpcgi_etc_t;
+		type totpcgi_private_etc_t;
+        type totpcgi_etc_t;
 	')
 
-	allow $1 httpd_totpcgi_etc_t:dir list_dir_perms;
-	manage_files_pattern($1, httpd_totpcgi_private_etc_t, httpd_totpcgi_private_etc_t)
+	allow $1 totpcgi_etc_t:dir list_dir_perms;
+	manage_files_pattern($1, totpcgi_private_etc_t, totpcgi_private_etc_t)
 	files_search_etc($1)
 ')
 
 ########################################
 ## <summary>
-##	Search httpd_totpcgi_script lib directories.
+##	Search totpcgi_script lib directories.
 ## </summary>
 ## <param name="domain">
 ##	<summary>
@@ -130,18 +130,18 @@ interface(`httpd_totpcgi_manage_private_conf_files',`
 ##	</summary>
 ## </param>
 #
-interface(`httpd_totpcgi_script_search_lib',`
+interface(`totpcgi_script_search_lib',`
 	gen_require(`
-		type httpd_totpcgi_script_var_lib_t;
+		type totpcgi_script_var_lib_t;
 	')
 
-	allow $1 httpd_totpcgi_script_var_lib_t:dir search_dir_perms;
+	allow $1 totpcgi_script_var_lib_t:dir search_dir_perms;
 	files_search_var_lib($1)
 ')
 
 ########################################
 ## <summary>
-##	Read httpd_totpcgi_script lib files.
+##	Read totpcgi_script lib files.
 ## </summary>
 ## <param name="domain">
 ##	<summary>
@@ -149,18 +149,18 @@ interface(`httpd_totpcgi_script_search_lib',`
 ##	</summary>
 ## </param>
 #
-interface(`httpd_totpcgi_script_read_lib_files',`
+interface(`totpcgi_script_read_lib_files',`
 	gen_require(`
-		type httpd_totpcgi_script_var_lib_t;
+		type totpcgi_script_var_lib_t;
 	')
 
 	files_search_var_lib($1)
-	read_files_pattern($1, httpd_totpcgi_script_var_lib_t, httpd_totpcgi_script_var_lib_t)
+	read_files_pattern($1, totpcgi_script_var_lib_t, totpcgi_script_var_lib_t)
 ')
 
 ########################################
 ## <summary>
-##	Manage httpd_totpcgi_script lib files.
+##	Manage totpcgi_script lib files.
 ## </summary>
 ## <param name="domain">
 ##	<summary>
@@ -168,18 +168,18 @@ interface(`httpd_totpcgi_script_read_lib_files',`
 ##	</summary>
 ## </param>
 #
-interface(`httpd_totpcgi_script_manage_lib_files',`
+interface(`totpcgi_script_manage_lib_files',`
 	gen_require(`
-		type httpd_totpcgi_script_var_lib_t;
+		type totpcgi_script_var_lib_t;
 	')
 
 	files_search_var_lib($1)
-	manage_files_pattern($1, httpd_totpcgi_script_var_lib_t, httpd_totpcgi_script_var_lib_t)
+	manage_files_pattern($1, totpcgi_script_var_lib_t, totpcgi_script_var_lib_t)
 ')
 
 ########################################
 ## <summary>
-##	Manage httpd_totpcgi_script lib directories.
+##	Manage totpcgi_script lib directories.
 ## </summary>
 ## <param name="domain">
 ##	<summary>
@@ -187,20 +187,20 @@ interface(`httpd_totpcgi_script_manage_lib_files',`
 ##	</summary>
 ## </param>
 #
-interface(`httpd_totpcgi_script_manage_lib_dirs',`
+interface(`totpcgi_script_manage_lib_dirs',`
 	gen_require(`
-		type httpd_totpcgi_script_var_lib_t;
+		type totpcgi_script_var_lib_t;
 	')
 
 	files_search_var_lib($1)
-	manage_dirs_pattern($1, httpd_totpcgi_script_var_lib_t, httpd_totpcgi_script_var_lib_t)
+	manage_dirs_pattern($1, totpcgi_script_var_lib_t, totpcgi_script_var_lib_t)
 ')
 
 
 ########################################
 ## <summary>
 ##	All of the rules required to administrate
-##	an httpd_totpcgi_script environment
+##	an totpcgi_script environment
 ## </summary>
 ## <param name="domain">
 ##	<summary>
@@ -214,26 +214,26 @@ interface(`httpd_totpcgi_script_manage_lib_dirs',`
 ## </param>
 ## <rolecap/>
 #
-interface(`httpd_totpcgi_admin',`
+interface(`totpcgi_admin',`
 	gen_require(`
-		type httpd_totpcgi_script_t;
-		type httpd_totpcgi_provisioning_script_t;
-		type httpd_totpcgi_etc_t;
-		type httpd_totpcgi_private_etc_t;
-		type httpd_totpcgi_script_var_lib_t;
+		type totpcgi_script_t;
+		type totpcgi_provisioning_script_t;
+		type totpcgi_etc_t;
+		type totpcgi_private_etc_t;
+		type totpcgi_script_var_lib_t;
 	')
 
-	allow $1 httpd_totpcgi_script_t:process { ptrace signal_perms };
-	allow $1 httpd_totpcgi_provisioning_script_t:process { ptrace signal_perms };
-	ps_process_pattern($1, httpd_totpcgi_script_t)
-	ps_process_pattern($1, httpd_totpcgi_provisioning_script_t)
+	allow $1 totpcgi_script_t:process { ptrace signal_perms };
+	allow $1 totpcgi_provisioning_script_t:process { ptrace signal_perms };
+	ps_process_pattern($1, totpcgi_script_t)
+	ps_process_pattern($1, totpcgi_provisioning_script_t)
 
 	files_search_etc($1)
-	admin_pattern($1, httpd_totpcgi_etc_t)
-	admin_pattern($1, httpd_totpcgi_private_etc_t)
+	admin_pattern($1, totpcgi_etc_t)
+	admin_pattern($1, totpcgi_private_etc_t)
 
 	files_search_var_lib($1)
-	admin_pattern($1, httpd_totpcgi_script_var_lib_t)
+	admin_pattern($1, totpcgi_script_var_lib_t)
 
 ')
 

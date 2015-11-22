@@ -8,59 +8,59 @@ policy_module(totpcgi, 1.1.1)
 apache_content_template(totpcgi)
 apache_content_template(totpcgi_provisioning)
 
-type httpd_totpcgi_etc_t;
-files_type(httpd_totpcgi_etc_t)
+type totpcgi_etc_t;
+files_type(totpcgi_etc_t)
 
-type httpd_totpcgi_private_etc_t;
-files_type(httpd_totpcgi_private_etc_t)
+type totpcgi_private_etc_t;
+files_type(totpcgi_private_etc_t)
 
-type httpd_totpcgi_script_var_lib_t;
-files_type(httpd_totpcgi_script_var_lib_t)
+type totpcgi_script_var_lib_t;
+files_type(totpcgi_script_var_lib_t)
 
 ########################################
 #
-# httpd_totpcgi_script local policy
+# totpcgi_script local policy
 #
 
-search_dirs_pattern(httpd_totpcgi_script_t, httpd_totpcgi_etc_t, httpd_totpcgi_etc_t)
-read_files_pattern(httpd_totpcgi_script_t, httpd_totpcgi_etc_t, httpd_totpcgi_etc_t)
-read_files_pattern(httpd_totpcgi_script_t, httpd_totpcgi_private_etc_t, httpd_totpcgi_private_etc_t)
+search_dirs_pattern(totpcgi_script_t, totpcgi_etc_t, totpcgi_etc_t)
+read_files_pattern(totpcgi_script_t, totpcgi_etc_t, totpcgi_etc_t)
+read_files_pattern(totpcgi_script_t, totpcgi_private_etc_t, totpcgi_private_etc_t)
 
-search_dirs_pattern(httpd_totpcgi_provisioning_script_t, httpd_totpcgi_etc_t, httpd_totpcgi_etc_t)
-read_files_pattern(httpd_totpcgi_provisioning_script_t, httpd_totpcgi_etc_t, httpd_totpcgi_etc_t)
-manage_files_pattern(httpd_totpcgi_provisioning_script_t, httpd_totpcgi_private_etc_t, httpd_totpcgi_private_etc_t)
-files_etc_filetrans(httpd_totpcgi_provisioning_script_t, httpd_totpcgi_private_etc_t, { dir file})
+search_dirs_pattern(totpcgi_provisioning_script_t, totpcgi_etc_t, totpcgi_etc_t)
+read_files_pattern(totpcgi_provisioning_script_t, totpcgi_etc_t, totpcgi_etc_t)
+manage_files_pattern(totpcgi_provisioning_script_t, totpcgi_private_etc_t, totpcgi_private_etc_t)
+files_etc_filetrans(totpcgi_provisioning_script_t, totpcgi_private_etc_t, { dir file})
 
-manage_dirs_pattern(httpd_totpcgi_script_t, httpd_totpcgi_script_var_lib_t, httpd_totpcgi_script_var_lib_t)
-manage_files_pattern(httpd_totpcgi_script_t, httpd_totpcgi_script_var_lib_t, httpd_totpcgi_script_var_lib_t)
-files_var_lib_filetrans(httpd_totpcgi_script_t, httpd_totpcgi_script_var_lib_t, { dir file })
-manage_dirs_pattern(httpd_totpcgi_provisioning_script_t, httpd_totpcgi_script_var_lib_t, httpd_totpcgi_script_var_lib_t)
-manage_files_pattern(httpd_totpcgi_provisioning_script_t, httpd_totpcgi_script_var_lib_t, httpd_totpcgi_script_var_lib_t)
-files_var_lib_filetrans(httpd_totpcgi_provisioning_script_t, httpd_totpcgi_script_var_lib_t, { dir file })
+manage_dirs_pattern(totpcgi_script_t, totpcgi_script_var_lib_t, totpcgi_script_var_lib_t)
+manage_files_pattern(totpcgi_script_t, totpcgi_script_var_lib_t, totpcgi_script_var_lib_t)
+files_var_lib_filetrans(totpcgi_script_t, totpcgi_script_var_lib_t, { dir file })
+manage_dirs_pattern(totpcgi_provisioning_script_t, totpcgi_script_var_lib_t, totpcgi_script_var_lib_t)
+manage_files_pattern(totpcgi_provisioning_script_t, totpcgi_script_var_lib_t, totpcgi_script_var_lib_t)
+files_var_lib_filetrans(totpcgi_provisioning_script_t, totpcgi_script_var_lib_t, { dir file })
 
-logging_send_syslog_msg(httpd_totpcgi_script_t)
-logging_send_syslog_msg(httpd_totpcgi_provisioning_script_t)
+logging_send_syslog_msg(totpcgi_script_t)
+logging_send_syslog_msg(totpcgi_provisioning_script_t)
 
 # needed by totp.fcgi
-allow httpd_totpcgi_script_t httpd_t:unix_stream_socket { ioctl accept getattr shutdown read write };
+allow totpcgi_script_t httpd_t:unix_stream_socket { ioctl accept getattr shutdown read write };
 # Not sure what triggers this, but it's not needed
-files_dontaudit_list_tmp(httpd_totpcgi_script_t)
-files_dontaudit_list_tmp(httpd_totpcgi_provisioning_script_t)
+files_dontaudit_list_tmp(totpcgi_script_t)
+files_dontaudit_list_tmp(totpcgi_provisioning_script_t)
 
 # This should be upstream, really.
 allow httpd_suexec_t httpd_t:unix_stream_socket { read write };
 #
 # Allow binding to ldap
-sysnet_dns_name_resolve(httpd_totpcgi_script_t)
-miscfiles_read_certs(httpd_totpcgi_script_t)
-sysnet_use_ldap(httpd_totpcgi_script_t)
-sysnet_dns_name_resolve(httpd_totpcgi_provisioning_script_t)
-miscfiles_read_certs(httpd_totpcgi_provisioning_script_t)
-sysnet_use_ldap(httpd_totpcgi_provisioning_script_t)
+sysnet_dns_name_resolve(totpcgi_script_t)
+miscfiles_read_generic_certs(totpcgi_script_t)
+sysnet_use_ldap(totpcgi_script_t)
+sysnet_dns_name_resolve(totpcgi_provisioning_script_t)
+miscfiles_read_generic_certs(totpcgi_provisioning_script_t)
+sysnet_use_ldap(totpcgi_provisioning_script_t)
 
 # Allow connecting to postgresql
-postgresql_tcp_connect(httpd_totpcgi_script_t)
-postgresql_stream_connect(httpd_totpcgi_script_t)
-postgresql_tcp_connect(httpd_totpcgi_provisioning_script_t)
-postgresql_stream_connect(httpd_totpcgi_provisioning_script_t)
+postgresql_tcp_connect(totpcgi_script_t)
+postgresql_stream_connect(totpcgi_script_t)
+postgresql_tcp_connect(totpcgi_provisioning_script_t)
+postgresql_stream_connect(totpcgi_provisioning_script_t)
 
