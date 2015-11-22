@@ -156,7 +156,7 @@ def show_totp_page(config, user, gaus):
     # generate provisioning URI
     tpt = Template(config.get('secret', 'totp_user_mask'))
     totp_user = tpt.safe_substitute(username=user)
-    totp_qr_uri = gaus.totp.provisioning_uri(totp_user)
+    totp_qr_uri = gaus.otp.provisioning_uri(totp_user)
 
     action_url = config.get('secret', 'action_url')
     
