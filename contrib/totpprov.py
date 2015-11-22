@@ -34,6 +34,11 @@ syslog.openlog('totpprov', syslog.LOG_PID, syslog.LOG_AUTH)
 
 from string import Template
 
+try:
+    from urllib.parse import quote
+except ImportError:
+    from urllib import quote
+
 
 def ays():
     inp = raw_input('Are you sure [y/N]: ')
@@ -204,7 +209,17 @@ def generate_user_token(backends, config, args, pincode=None):
     except ConfigParser.NoOptionError:
         totp_issuer = None
     totp_user = tpt.safe_substitute(username=user)
-    qr_uri = gaus.otp.provisioning_uri(totp_user, issuer_name=totp_issuer)
+
+    if pyotp.VERSION.find('1.3') == 0:
+        # Older versions of pyotp don't deal with issuer_name
+        if totp_issuer is not None:
+            base = '%s:%s' % (totp_issuer, totp_user)
+            qr_uri = gaus.otp.provisioning_uri(base)
+            qr_uri += '&issuer=%s' % quote(totp_issuer)
+        else:
+            qr_uri = gaus.otp.provisioning_uri(totp_user)
+    else:
+        qr_uri = gaus.otp.provisioning_uri(totp_user, issuer_name=totp_issuer)
 
     print 'OTP URI: %s' % qr_uri
     if gaus.is_hotp():

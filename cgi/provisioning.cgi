@@ -26,6 +26,8 @@ import logging
 import cgitb
 cgitb.enable()
 
+import pyotp
+
 import totpcgi
 import totpcgi.backends
 import totpcgi.utils
@@ -169,10 +171,20 @@ def show_totp_page(config, user, gaus):
     except ConfigParser.NoOptionError:
         totp_issuer = None
     totp_user = tpt.safe_substitute(username=user)
-    totp_qr_uri = gaus.otp.provisioning_uri(totp_user, issuer_name=totp_issuer)
+
+    if pyotp.VERSION.find('1.3') == 0:
+        # Older versions of pyotp don't deal with issuer_name
+        if totp_issuer is not None:
+            base = '%s:%s' % (totp_issuer, totp_user)
+            totp_qr_uri = gaus.otp.provisioning_uri(base)
+            totp_qr_uri += '&issuer=%s' % quote(totp_issuer)
+        else:
+            totp_qr_uri = gaus.otp.provisioning_uri(totp_user)
+    else:
+        totp_qr_uri = gaus.otp.provisioning_uri(totp_user, issuer_name=totp_issuer)
 
     action_url = config.get('secret', 'action_url')
-    
+
     qrcode_embed = '<img src="%s?qrcode=%s"/>' % (action_url, quote(totp_qr_uri))
 
     templates_dir = config.get('secret', 'templates_dir')
