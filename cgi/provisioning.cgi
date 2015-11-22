@@ -296,7 +296,10 @@ def cgimain():
     except totpcgi.UserSecretError, ex:
         bad_request(config, 'Existing secret could not be processed: %s' % ex)
 
-    allow_reissue = config.getboolean('secret', 'allow_reissue')
+    try:
+        allow_reissue = config.getboolean('secret', 'allow_reissue')
+    except ConfigParser.NoOptionError:
+        allow_reissue = True
 
     if exists and action != 'reissue':
         syslog.syslog(syslog.LOG_NOTICE,
