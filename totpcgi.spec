@@ -2,7 +2,7 @@
 
 %define selinux_policyver %(%{__sed} -e 's,.*selinux-policy-\\([^/]*\\)/.*,\\1,' /usr/share/selinux/devel/policyhelp || echo 0.0.0)
 
-%define selinux_variants mls strict targeted
+%define selinux_variants minimum mls targeted
 
 %define totpcgiuser     totpcgi
 %define totpcgiprovuser totpcgiprov
@@ -11,7 +11,7 @@
 
 Name:       totpcgi
 Version:    0.6.0
-Release:    0.pre.1%{?dist}
+Release:    1%{?dist}
 Summary:    A centralized totp solution based on google-authenticator
 
 License:    GPLv2+
@@ -66,7 +66,11 @@ This package includes SELinux policy for totpcgi and totpcgi-provisioning.
 
 %build
 %{__python} setup.py build
+%if 0%{?el6}
+pushd selinux/el6
+%else
 pushd selinux
+%endif
 for selinuxvariant in %{selinux_variants}
 do
   make NAME=${selinuxvariant} -f /usr/share/selinux/devel/Makefile
@@ -118,12 +122,18 @@ mkdir -p -m 0755 %{buildroot}%{_mandir}/man1
 install -m 0644 contrib/totpprov.1 %{buildroot}%{_mandir}/man1/
 
 # Install SELinux files
+%if 0%{?el6}
+pushd selinux/el6
+%else
+pushd selinux
+%endif
 for selinuxvariant in %{selinux_variants}
 do
   install -d %{buildroot}%{_datadir}/selinux/${selinuxvariant}
-  install -p -m 644 selinux/totpcgi.pp.${selinuxvariant} \
+  install -p -m 644 totpcgi.pp.${selinuxvariant} \
     %{buildroot}%{_datadir}/selinux/${selinuxvariant}/totpcgi.pp
 done
+popd
 /usr/sbin/hardlink -cv %{buildroot}%{_datadir}/selinux
 
 
@@ -206,6 +216,9 @@ fi
 
 
 %changelog
+* Sun Nov 22 2015 Konstantin Ryabitsev <mricon@kernel.org> - 0.6.0-1
+- Release 0.6.0
+
 * Thu May 22 2014 Konstantin Ryabitsev <mricon@kernel.org> - 0.6.0-0.pre.1
 - New pre 0.6
 
