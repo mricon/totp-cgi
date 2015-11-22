@@ -156,6 +156,10 @@ def show_reissue_page(config, user):
     sys.stdout.write(out)
     sys.exit(0)
 
+def show_reissue_denied(config):
+    syslog.syslog(syslog.LOG_NOTICE,
+        'Attempt to reissue token when token reissuance disabled')
+    bad_request(config, "The ability to reissue tokens is currently disabled.")
 
 def show_totp_page(config, user, gaus):
     # generate provisioning URI
@@ -292,12 +296,22 @@ def cgimain():
     except totpcgi.UserSecretError, ex:
         bad_request(config, 'Existing secret could not be processed: %s' % ex)
 
+    allow_reissue = config.getboolean('secret', 'allow_reissue')
+
     if exists and action != 'reissue':
         syslog.syslog(syslog.LOG_NOTICE,
             'Secret exists: user=%s, host=%s' % (user, remote_host))
-        show_reissue_page(config, user)
+        # make sure we're allowed to reissue tokens
+        if allow_reissue:
+            show_reissue_page(config, user)
+        else:
+            show_reissue_denied(config)
 
     if action == 'reissue':
+        # make sure we're allowed to reissue
+        if not allow_reissue:
+            show_reissue_denied(config)
+
         # verify token first
         tokencode = form.getfirst('tokencode')
         gau = totpcgi.GAUser(user, backends)
