@@ -112,6 +112,14 @@ def is_authorized_ip(ip, authorized_ips):
     myipaddr = netaddr.IPAddress(ip)
     for authorized_ip in authorized_ips.keys():
         if myipaddr in netaddr.IPNetwork(authorized_ip):
+            # Do we have a session restriction?
+            if 'sessionid' in authorized_ips[authorized_ip]:
+                if 'XDG_SESSION_ID' not in os.environ:
+                    # not sure what happened but this invalidates the session
+                    return False
+                if os.environ['XDG_SESSION_ID'] != authorized_ips[authorized_ip]['sessionid']:
+                    # Your ControlMaster session got renewed, sorry!
+                    return False
             # Is it expired?
             expires = authorized_ips[authorized_ip]['expires']
             if not is_expired(expires):
@@ -199,7 +207,7 @@ def store_authorized_ips(valdata):
     logger.debug('Wrote new validations file in %s' % valfile)
 
 
-def store_validation(validated_ip, hours):
+def store_validation(validated_ip, hours, session):
     valdata = load_authorized_ips()
 
     # Get rid of any previously validated IPs matching this one (or this range)
@@ -212,11 +220,20 @@ def store_validation(validated_ip, hours):
     now_time = datetime.datetime.now(utc).replace(microsecond=0)
     expires = now_time + datetime.timedelta(hours=hours)
 
-    logger.info('Adding IP address %s until %s' % (validated_ip, expires.strftime('%c %Z')))
     valdata[validated_ip] = {
         'added': now_time.isoformat(sep=' '),
         'expires': expires.isoformat(sep=' '),
     }
+
+    # if val-session was used, we store the current XDG_SESSION_ID, if found
+    # otherwise it's effectively equivalent to 'val'
+    if session and 'XDG_SESSION_ID' in os.environ:
+        xdg_session_id = os.environ['XDG_SESSION_ID']
+        valdata[validated_ip]['sessionid'] = xdg_session_id
+        logger.info('Adding IP address %s with sessionid %s until %s'
+                % (validated_ip, xdg_session_id, expires.strftime('%c %Z')))
+    else:
+        logger.info('Adding IP address %s until %s' % (validated_ip, expires.strftime('%c %Z')))
 
     if mynetwork.size == 1:
         # Try to lookup whois info if cymruwhois is available
@@ -410,11 +427,11 @@ def unenroll(backends):
     logger.info('You have been successfully unenrolled.')
 
 
-def val(backends, hours=24, authorize_ip=None):
+def val(backends, hours=24, authorize_ip=None, session=False):
     if len(sys.argv) <= 2:
         logger.critical('Missing tokencode.')
         print('You need to pass the token code as the last argument. E.g.:')
-        print('    %s val [token]' % GL_2FA_COMMAND)
+        print('    %s %s [token]' % (GL_2FA_COMMAND, sys.argv[1]))
         print_help_link()
         sys.exit(1)
 
@@ -451,7 +468,7 @@ def val(backends, hours=24, authorize_ip=None):
     if authorize_ip is None:
         authorize_ip = remote_ip
 
-    store_validation(authorize_ip, hours)
+    store_validation(authorize_ip, hours, session)
 
 
 def isval():
@@ -544,7 +561,7 @@ def main():
     ch = logging.FileHandler(logfile)
     ch.setFormatter(formatter)
 
-    if '2FA_LOG_DEBUG' in os.environ.keys():
+    if '2FA_LOG_DEBUG' in os.environ:
         loglevel = logging.DEBUG
     else:
         loglevel = logging.INFO
@@ -599,6 +616,9 @@ def main():
 
     elif command == 'val':
         val(backends)
+
+    elif command == 'val-session':
+        val(backends, hours=8, authorize_ip=None, session=True)
 
     elif command == 'val-for-days':
         if len(sys.argv) <= 2:
@@ -692,8 +712,18 @@ def main():
         print('               | (mode=totp or yubikey)')
         print('---------------|-----------------------------------------------')
         print('val [tkn]      | Validate your current IP address for 24 hours')
-        print('               | (tkn means your currently displayed 2fa code')
+        print('               | (tkn means your current 2fa code)')
         print('---------------|-----------------------------------------------')
+
+        # When ssh session is started from systemd, it will helpfully set
+        # a XDG_SESSION_ID variable that is unique per connection per system uptime
+        # We can use this in conjunction with ssh's ControlMaster feature to
+        # validate a single ongoing session per user per remote IP.
+        if 'XDG_SESSION_ID' in os.environ:
+            print('val-session    | Validate your current ssh ControlMaster session')
+            print(' [tkn]         | (tkn means your current 2fa code)')
+            print('---------------|-----------------------------------------------')
+
         print('val-for-days   | Validate your current IP address for NN days')
         print(' [NN] [tkn]    | (max=30)')
         print('---------------|-----------------------------------------------')

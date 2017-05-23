@@ -70,6 +70,16 @@ def is_authorized_ip(ip, authorized_ips):
     matched = False
     for authorized_ip in authorized_ips.keys():
         if myipaddr in netaddr.IPNetwork(authorized_ip):
+            # Do we have a session restriction?
+            if 'sessionid' in authorized_ips[authorized_ip]:
+                if 'XDG_SESSION_ID' not in os.environ:
+                    # not sure what happened but this invalidates the session
+                    logger.critical('Could not obtain session info from env.')
+                    return False
+                if os.environ['XDG_SESSION_ID'] != authorized_ips[authorized_ip]['sessionid']:
+                    logger.critical('Your session for IP address %s has changed.' % ip)
+                    logger.critical('Check your ControlMaster settings and run val-session again.')
+                    return False
             matched = True
             # Is it expired?
             expires = authorized_ips[authorized_ip]['expires']
