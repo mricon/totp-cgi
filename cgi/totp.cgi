@@ -1,4 +1,5 @@
-#!/usr/bin/python -tt
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 ##
 # Copyright (C) 2012 by Konstantin Ryabitsev and contributors
 #
@@ -17,17 +18,24 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
 # 02111-1307, USA.
 #
+from __future__ import (absolute_import,
+                        division,
+                        print_function,
+                        with_statement,
+                        unicode_literals)
+
+__author__ = 'Konstantin Ryabitsev <konstantin@linuxfoundation.org>'
+
 import os
 import sys
 import cgi
 import syslog
-import logging
-
-import cgitb
-cgitb.enable()
 
 import totpcgi
 import totpcgi.backends
+
+import cgitb
+cgitb.enable()
 
 if len(sys.argv) > 1:
     # blindly assume it's the config file
@@ -35,24 +43,28 @@ if len(sys.argv) > 1:
 else:
     config_file = '/etc/totpcgi/totpcgi.conf'
 
-import ConfigParser
+try:
+    import configparser
+except ImportError:
+    import ConfigParser as configparser
 
-config = ConfigParser.RawConfigParser()
+config = configparser.RawConfigParser()
 config.read(config_file)
 
 require_pincode = config.getboolean('main', 'require_pincode')
-success_string  = config.get('main', 'success_string')
+success_string = config.get('main', 'success_string')
 
 backends = totpcgi.backends.Backends()
 
 try:
     backends.load_from_config(config)
-except totpcgi.backends.BackendNotSupported, ex:
+except totpcgi.backends.BackendNotSupported as bex:
     syslog.syslog(syslog.LOG_CRIT, 
-            'Backend engine not supported: %s' % ex)
+                  'Backend engine not supported: %s' % bex)
     sys.exit(1)
 
-syslog.openlog('totp.cgi', syslog.LOG_PID, syslog.LOG_AUTH)
+syslog.openlog(str('totp.cgi'), syslog.LOG_PID, syslog.LOG_AUTH)
+
 
 def bad_request(why):
     output = 'ERR\n' + why + '\n'
@@ -64,6 +76,7 @@ def bad_request(why):
     sys.stdout.write(output)
     sys.exit(0)
 
+
 def cgimain():
     form = cgi.FieldStorage()
 
@@ -73,9 +86,9 @@ def cgimain():
         if must_key not in form:
             bad_request("Missing field: %s" % must_key)
 
-    user  = form.getfirst('user')
+    user = form.getfirst('user')
     token = form.getfirst('token')
-    mode  = form.getfirst('mode')
+    mode = form.getfirst('mode')
 
     remote_host = os.environ['REMOTE_ADDR']
 
@@ -84,17 +97,19 @@ def cgimain():
 
     ga = totpcgi.GoogleAuthenticator(backends, require_pincode)
 
+    status = 'UNKNOWN'
+
     try:
         status = ga.verify_user_token(user, token)
-    except Exception, ex:
+    except Exception as ex:
         syslog.syslog(syslog.LOG_NOTICE,
-            'Failure: user=%s, mode=%s, host=%s, message=%s' % (user, mode, 
-                remote_host, str(ex)))
+                      'Failure: user=%s, mode=%s, host=%s, message=%s' % (
+                          user, mode, remote_host, str(ex)))
         bad_request(str(ex))
 
     syslog.syslog(syslog.LOG_NOTICE, 
-        'Success: user=%s, mode=%s, host=%s, message=%s' % (user, mode, 
-            remote_host, status))
+                  'Success: user=%s, mode=%s, host=%s, message=%s' % (
+                      user, mode, remote_host, status))
 
     sys.stdout.write('Status: 200 OK\n')
     sys.stdout.write('Content-type: text/plain\n')
@@ -106,4 +121,3 @@ def cgimain():
 
 if __name__ == '__main__':
     cgimain()
-

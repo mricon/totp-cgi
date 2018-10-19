@@ -20,12 +20,10 @@ import totpcgi
 import totpcgi.backends
 import totpcgi.utils
 
-logger = logging.getLogger('totpcgi')
-
 import os
 from fcntl import lockf, LOCK_EX, LOCK_UN, LOCK_SH
 
-import anydbm
+logger = logging.getLogger('totpcgi')
 
 
 class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
@@ -74,47 +72,18 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
         if not os.access(self.pincode_file, os.R_OK):
             raise totpcgi.UserNotFound('pincodes file not found!')
 
-        # Check if we have a compiled version first
-        logger.debug('Checking if there is a pincodes.db')
-        pincode_db_file = self.pincode_file + '.db'
+        logger.debug('Reading pincode file: %s' % self.pincode_file)
 
-        hashcode = None
+        hashcodes = self._get_all_hashcodes()
 
-        if os.access(pincode_db_file, os.R_OK):
-            logger.debug('Found pincodes.db. Comparing mtime with pincodes')
-            dbmtime = os.stat(pincode_db_file).st_mtime
-            ptmtime = os.stat(self.pincode_file).st_mtime
-
-            logger.debug('dbmtime=%s' % dbmtime)
-            logger.debug('ptmtime=%s' % ptmtime)
-
-            if dbmtime >= ptmtime:
-                logger.debug('.db mtime greater, will use the db')
-
-                db = anydbm.open(pincode_db_file, 'r')
-
-                if user in db.keys():
-                    logger.debug('Found %s in the .db' % user)
-                    hashcode = db[user]
-                    db.close()
-
-                logger.debug('%s not in .db. Falling back to plaintext.' % user)
-            else:
-                logger.debug('.db is stale! Falling back to plaintext.')
-
-        if hashcode is None:
-            logger.debug('Reading pincode file: %s' % self.pincode_file)
-
-            hashcodes = self._get_all_hashcodes()
-
-            try:
-                hashcode = hashcodes[user]
-            except KeyError:
-                raise totpcgi.UserPincodeError('Pincode not found for user %s' % user)
+        try:
+            hashcode = hashcodes[user]
+        except KeyError:
+            raise totpcgi.UserPincodeError('Pincode not found for user %s' % user)
 
         return self._verify_by_hashcode(pincode, hashcode)
 
-    def save_user_hashcode(self, user, hashcode, makedb=True):
+    def save_user_hashcode(self, user, hashcode):
         hashcodes = self._get_all_hashcodes()
 
         if hashcode is None:
@@ -130,24 +99,12 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
             hashcodes[user] = hashcode
 
         # Bubble up any write errors up the chain
-        fh = open(self.pincode_file, 'w')
-        lockf(fh, LOCK_EX)
+        with open(self.pincode_file, 'w') as fh:
+            lockf(fh, LOCK_EX)
+            for user, hashcode in hashcodes.items():
+                fh.write('%s:%s\n' % (user, hashcode))
 
-        for user, hashcode in hashcodes.iteritems():
-            fh.write('%s:%s\n' % (user, hashcode))
-
-        lockf(fh, LOCK_UN)
-        fh.close()
-
-        if makedb:
-            # We always overwrite the db file to avoid any discrepancies with
-            # the text file.
-            pincode_db_file = self.pincode_file + '.db'
-            logger.debug('Compiling the db in %s' % pincode_db_file)
-
-            db = anydbm.open(pincode_db_file, 'n')
-            db.update(hashcodes)
-            db.close()
+            lockf(fh, LOCK_UN)
 
     def delete_user_hashcode(self, user):
         self.save_user_hashcode(user, None)
@@ -168,67 +125,66 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
         if not os.access(totp_file, os.R_OK):
             raise totpcgi.UserNotFound('%s.totp does not exist or is not readable' % user)
 
-        fh = open(totp_file, 'r')
-        lockf(fh, LOCK_SH)
+        with open(totp_file, 'r') as fh:
+            lockf(fh, LOCK_SH)
 
-        # secret is always the first entry
-        secret = fh.readline()
-        secret = secret.strip()
+            # secret is always the first entry
+            secret = fh.readline()
+            secret = secret.strip()
 
-        using_encrypted_secret = False
-        if secret.find('aes256+hmac256') == 0:
-            using_encrypted_secret = True
-            if pincode is not None:
-                secret = totpcgi.utils.decrypt_secret(secret, pincode)
-            else:
-                raise totpcgi.UserSecretError('Secret is encrypted, but no pincode provided')
+            using_encrypted_secret = False
+            if secret.find('aes256+hmac256') == 0:
+                using_encrypted_secret = True
+                if pincode is not None:
+                    secret = totpcgi.utils.decrypt_secret(secret, pincode)
+                else:
+                    raise totpcgi.UserSecretError('Secret is encrypted, but no pincode provided')
 
-        gaus = totpcgi.GAUserSecret(secret)
+            gaus = totpcgi.GAUserSecret(secret)
 
-        while True:
-            line = fh.readline()
+            while True:
+                line = fh.readline()
 
-            if line == '':
-                break
+                if line == '':
+                    break
 
-            line = line.strip()
+                line = line.strip()
 
-            if len(line) and line[0] == '"':
-                if line[2:12] == 'RATE_LIMIT':
-                    (tries, seconds) = line[13:].split(' ')
-                    gaus.rate_limit = (int(tries), int(seconds))
-                    logger.debug('rate_limit=%s' % str(gaus.rate_limit))
+                if len(line) and line[0] == '"':
+                    if line[2:12] == 'RATE_LIMIT':
+                        (tries, seconds) = line[13:].split(' ')
+                        gaus.rate_limit = (int(tries), int(seconds))
+                        logger.debug('rate_limit=%s' % str(gaus.rate_limit))
 
-                elif line[2:13] == 'WINDOW_SIZE':
-                    window_size = int(line[14:])
-                    if 0 < window_size < 3:
-                        window_size = 3
-                    gaus.window_size = window_size
-                    logger.debug('window_size=%s' % window_size)
+                    elif line[2:13] == 'WINDOW_SIZE':
+                        window_size = int(line[14:])
+                        if 0 < window_size < 3:
+                            window_size = 3
+                        gaus.window_size = window_size
+                        logger.debug('window_size=%s' % window_size)
 
-                elif line[2:14] == 'HOTP_COUNTER':
-                    # This will most likely be overriden by user state, but load it up anyway,
-                    # as this will trigger HOTP mode.
+                    elif line[2:14] == 'HOTP_COUNTER':
+                        # This will most likely be overriden by user state, but load it up anyway,
+                        # as this will trigger HOTP mode.
+                        try:
+                            gaus.set_hotp(int(line[15:]))
+                        except ValueError:
+                            gaus.set_hotp(0)
+
+                        logger.debug('hotp_counter=%s' % gaus.counter)
+
+                # Scratch code tokens are 8-digit
+                # We ignore scratch tokens if we're using encrypted secret
+                elif len(line) == 8 and not using_encrypted_secret:
                     try:
-                        gaus.set_hotp(int(line[15:]))
+                        gaus.scratch_tokens.append(line)
+                        logger.debug('Found a scratch-code token, adding it')
                     except ValueError:
-                        gaus.set_hotp(0)
+                        logger.debug('Non-numeric scratch token found')
+                        # don't fail, just pretend we didn't see it
+                        continue
 
-                    logger.debug('hotp_counter=%s' % gaus.counter)
-
-            # Scratch code tokens are 8-digit
-            # We ignore scratch tokens if we're using encrypted secret
-            elif len(line) == 8 and not using_encrypted_secret:
-                try:
-                    gaus.scratch_tokens.append(int(line))
-                    logger.debug('Found a scratch-code token, adding it')
-                except ValueError:
-                    logger.debug('Non-numeric scratch token found')
-                    # don't fail, just pretend we didn't see it
-                    continue
-
-        lockf(fh, LOCK_UN)
-        fh.close()
+            lockf(fh, LOCK_UN)
 
         # Make sure that we have a window_size defined
         # The topt configuration many not have had one, if not we need
@@ -322,7 +278,7 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
                 if 'counter' in js:
                     state.counter = js['counter']
 
-            except Exception, ex:
+            except Exception as ex:
                 # We fail out of caution, though if someone wanted to 
                 # screw things up, they could have done so without making
                 # the file un-parseable by json -- all they need to do is to

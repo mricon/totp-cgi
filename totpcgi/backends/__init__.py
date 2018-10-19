@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 ##
 # Copyright (C) 2012 by Konstantin Ryabitsev and contributors
 #
@@ -13,18 +14,24 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
 # 02111-1307, USA.
 #
+from __future__ import (absolute_import,
+                        division,
+                        print_function,
+                        with_statement,
+                        unicode_literals)
+
+__author__ = 'Konstantin Ryabitsev <konstantin@linuxfoundation.org>'
+
 import logging
 import totpcgi
 import syslog
 
-import exceptions
-
 logger = logging.getLogger('totpcgi')
 
 
-class BackendNotSupported(exceptions.Exception):
+class BackendNotSupported(Exception):
     def __init__(self, message):
-        exceptions.Exception.__init__(self, message)
+        Exception.__init__(self, message)
         logger.debug('!BackendNotSupported: %s' % message)
 
 

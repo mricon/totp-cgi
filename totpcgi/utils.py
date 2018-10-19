@@ -23,15 +23,14 @@ import hashlib
 import hmac
 import logging
 
-import string
 import struct
 
 import totpcgi
 
-logger = logging.getLogger('totpcgi')
-
 from Crypto.Cipher import AES
-from passlib.utils.pbkdf2 import pbkdf2
+from passlib.crypto.digest import pbkdf2_hmac
+
+logger = logging.getLogger('totpcgi')
 
 AES_BLOCK_SIZE = 16
 KDF_ITER = 2000
@@ -45,49 +44,49 @@ def hash_pincode(pincode, algo='bcrypt'):
 
     import passlib.hash
 
-    # we stick to 5000 rounds for uniform compatibility
     # if you want higher computational cost, just use bcrypt
     if algo == 'sha256':
-        return passlib.hash.sha256_crypt.encrypt(pincode, rounds=5000)
+        return passlib.hash.sha256_crypt.hash(pincode)
 
     if algo == 'sha512':
-        return passlib.hash.sha512_crypt.encrypt(pincode, rounds=5000)
+        return passlib.hash.sha512_crypt.hash(pincode)
 
     if algo == 'md5':
         # really? Okay.
-        return passlib.hash.md5_crypt.encrypt(pincode)
+        return passlib.hash.md5_crypt.hash(pincode)
 
-    return passlib.hash.bcrypt.encrypt(pincode)
+    return passlib.hash.bcrypt.hash(pincode)
 
 
 def generate_secret(rate_limit=(3, 30), window_size=3, scratch_tokens=5, bs=80):
     # os.urandom expects bytes, so we divide by 8
-    secret = base64.b32encode(os.urandom(bs/8))
+    secret = base64.b32encode(os.urandom(int(bs/8))).decode('utf-8')
 
     gaus = totpcgi.GAUserSecret(secret)
 
     gaus.rate_limit = rate_limit
     gaus.window_size = window_size
 
-    for i in xrange(scratch_tokens):
-        token = string.zfill(struct.unpack('I', os.urandom(4))[0], 8)[-8:]
+    for i in range(scratch_tokens):
+        token = str(struct.unpack('I', os.urandom(4))[0]).zfill(8)[-8:]
         gaus.scratch_tokens.append(token)
 
     return gaus
 
 
-def encrypt_secret(data, pincode):
+def encrypt_secret(strdata, pincode):
+    data = strdata.encode('utf-8')
     salt = os.urandom(SALT_SIZE)
 
     # derive a twice-long key from pincode
-    key = pbkdf2(pincode, salt, KDF_ITER, KEY_SIZE*2, prf='hmac-sha256')
+    key = pbkdf2_hmac('sha256', pincode, salt, KDF_ITER, KEY_SIZE*2)
 
     # split the key in two, one used for AES, another for HMAC
     aes_key = key[:KEY_SIZE]
     hmac_key = key[KEY_SIZE:]
 
     pad = AES_BLOCK_SIZE - len(data) % AES_BLOCK_SIZE
-    data += pad * chr(pad)
+    data += pad * bytearray((pad,))
     iv_bytes = os.urandom(AES_BLOCK_SIZE)
     cypher = AES.new(aes_key, AES.MODE_CBC, iv_bytes)
     data = iv_bytes + cypher.encrypt(data)
@@ -95,8 +94,8 @@ def encrypt_secret(data, pincode):
 
     # jab it all together in a base64-encrypted format
     b64str = ('aes256+hmac256$' 
-              + base64.b64encode(salt).replace('\n', '') + '$'
-              + base64.b64encode(data+sig).replace('\n', ''))
+              + base64.b64encode(salt).decode('utf-8').replace('\n', '') + '$'
+              + base64.b64encode(data+sig).decode('utf-8').replace('\n', ''))
 
     logger.debug('Encrypted secret: %s' % b64str)
 
@@ -114,7 +113,7 @@ def decrypt_secret(b64str, pincode):
     except (ValueError, TypeError):
         raise totpcgi.UserSecretError('Failed to parse encrypted secret')
 
-    key = pbkdf2(pincode, salt, KDF_ITER, KEY_SIZE*2, prf='hmac-sha256')
+    key = pbkdf2_hmac('sha256', pincode, salt, KDF_ITER, KEY_SIZE * 2)
 
     aes_key = key[:KEY_SIZE]
     hmac_key = key[KEY_SIZE:]
@@ -132,7 +131,8 @@ def decrypt_secret(b64str, pincode):
 
     cypher = AES.new(aes_key, AES.MODE_CBC, iv_bytes)
     data = cypher.decrypt(data)
-    secret = data[:-ord(data[-1])]
+    padlen = bytearray((data[-1],))[0]
+    secret = data[:-padlen].decode('utf-8')
 
     logger.debug('Decryption successful')
 

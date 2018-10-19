@@ -1,4 +1,5 @@
-#!/usr/bin/python -tt
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 ##
 # Copyright (C) 2012 by Konstantin Ryabitsev and contributors
 #
@@ -17,39 +18,55 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
 # 02111-1307, USA.
 #
+
+from __future__ import (absolute_import,
+                        division,
+                        print_function,
+                        with_statement,
+                        unicode_literals)
+
 import sys
 import syslog
 
 import totpcgi
 import totpcgi.backends
 
-import ConfigParser
+try:
+    import configparser
+except ImportError:
+    import ConfigParser as configparser
 
 from flup.server import fcgi
-from cgi import parse_qs
+try:
+    # noinspection PyCompatibility
+    from urllib.parse import parse_qs
+except ImportError:
+    from cgi import parse_qs
 
-syslog.openlog('totp.fcgi', syslog.LOG_PID, syslog.LOG_AUTH)
+syslog.openlog(str('totp.fcgi'), syslog.LOG_PID, syslog.LOG_AUTH)
 
 config = ConfigParser.RawConfigParser()
 config.read('/etc/totpcgi/totpcgi.conf')
 
 require_pincode = config.getboolean('main', 'require_pincode')
-success_string  = config.get('main', 'success_string')
+success_string = config.get('main', 'success_string')
 
 backends = totpcgi.backends.Backends()
 
 try:
     backends.load_from_config(config)
-except totpcgi.backends.BackendNotSupported, ex:
+except totpcgi.backends.BackendNotSupported as bex:
     syslog.syslog(syslog.LOG_CRIT, 
-            'Backend engine not supported: %s' % ex)
+                  'Backend engine not supported: %s' % bex)
     sys.exit(1)
+
 
 def bad_request(start_response, why):
     output = 'ERR\n' + why + '\n'
     start_response('400 BAD REQUEST', [('Content-Type', 'text/plain'),
                                        ('Content-Length', str(len(output)))])
     return output
+
 
 def webapp(environ, start_response):
     if environ['REQUEST_METHOD'] != 'POST':
@@ -66,9 +83,9 @@ def webapp(environ, start_response):
         if must_key not in form.keys():
             return bad_request(start_response, "Missing field: %s" % must_key)
 
-    user  = form['user'][0]
+    user = form['user'][0]
     token = form['token'][0]
-    mode  = form['mode'][0]
+    mode = form['mode'][0]
 
     remote_host = environ.get('REMOTE_ADDR')
 
@@ -79,15 +96,15 @@ def webapp(environ, start_response):
 
     try:
         status = ga.verify_user_token(user, token)
-    except Exception, ex:
+    except Exception as ex:
         syslog.syslog(syslog.LOG_NOTICE,
-            'Failure: user=%s, mode=%s, host=%s, message=%s' % (user, mode, 
-                remote_host, str(ex)))
+                      'Failure: user=%s, mode=%s, host=%s, message=%s' % (
+                          user, mode, remote_host, str(ex)))
         return bad_request(start_response, str(ex))
 
     syslog.syslog(syslog.LOG_NOTICE, 
-        'Success: user=%s, mode=%s, host=%s, message=%s' % (user, mode, 
-            remote_host, status))
+                  'Success: user=%s, mode=%s, host=%s, message=%s' % (
+                    user, mode, remote_host, status))
 
     status = success_string
 

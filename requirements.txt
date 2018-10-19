@@ -1,3 +1,6 @@
-Crypto
+pycryptodome
 passlib
 pyotp
+bcrypt
+psycopg2_binary
+flup
