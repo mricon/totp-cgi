@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 ##
 # Copyright (C) 2012 by Konstantin Ryabitsev and contributors
 #
@@ -13,7 +14,13 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
 # 02111-1307, USA.
 #
-from __future__ import absolute_import
+from __future__ import (absolute_import,
+                        division,
+                        print_function,
+                        with_statement,
+                        unicode_literals)
+
+__author__ = 'Konstantin Ryabitsev <konstantin@linuxfoundation.org>'
 
 import logging
 import totpcgi
@@ -23,6 +30,7 @@ import ldap
 from string import Template
 
 logger = logging.getLogger('totpcgi')
+
 
 class GASecretBackend:
     def __init__(self):
@@ -48,19 +56,22 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
 
     def verify_user_pincode(self, user, pincode):
         if len(self.ldap_cacert):
+            logger.debug('Setting ldap_cacert=%s', self.ldap_cacert)
             ldap.set_option(ldap.OPT_X_TLS_CACERTFILE, self.ldap_cacert)
 
+        logger.debug('Connecting to ldap_url=%s', self.ldap_url)
         lconn = ldap.initialize(self.ldap_url)
         lconn.protocol_version = 3
         lconn.set_option(ldap.OPT_REFERRALS, 0)
 
         tpt = Template(self.ldap_dn)
         dn = tpt.safe_substitute(username=user)
+        logger.debug('Attempting simple bind with dn=%s', dn)
         
         try:
             lconn.simple_bind_s(dn, pincode)
 
-        except Exception, ex:
+        except Exception as ex:
             raise totpcgi.UserPincodeError('LDAP bind failed: %s' % ex)
 
     def save_user_hashcode(self, user, pincode, makedb=True):

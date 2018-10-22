@@ -38,43 +38,43 @@ SANE_USERNAME_RE = re.compile(r'([\w.@=+_-]+)')
 class UserNotFound(Exception):
     def __init__(self, message):
         Exception.__init__(self, message)
-        logger.debug('!UserNotFound: %s' % message)
+        logger.debug('!UserNotFound: %s', message)
 
 
 class UserSecretError(Exception):
     def __init__(self, message):
         Exception.__init__(self, message)
-        logger.debug('!UserSecretError: %s' % message)
+        logger.debug('!UserSecretError: %s', message)
 
 
 class UserStateError(Exception):
     def __init__(self, message):
         Exception.__init__(self, message)
-        logger.debug('!UserStateError: %s' % message)
+        logger.debug('!UserStateError: %s', message)
 
 
 class UserPincodeError(Exception):
     def __init__(self, message):
         Exception.__init__(self, message)
-        logger.debug('!UserPincodeError: %s' % message)
+        logger.debug('!UserPincodeError: %s', message)
 
 
 class VerifyFailed(Exception):
     def __init__(self, message):
         Exception.__init__(self, message)
-        logger.debug('!VerifyFailed: %s' % message)
+        logger.debug('!VerifyFailed: %s', message)
 
 
 class SaveFailed(Exception):
     def __init__(self, message):
         Exception.__init__(self, message)
-        logger.debug('!SaveFailed: %s' % message)
+        logger.debug('!SaveFailed: %s', message)
 
 
 class DeleteFailed(Exception):
     def __init__(self, message):
         Exception.__init__(self, message)
-        logger.debug('!DeleteFailed: %s' % message)
+        logger.debug('!DeleteFailed: %s', message)
 
 
 class GAUserState:
@@ -135,11 +135,11 @@ class GAUserSecret:
                     # okay, let's try within the window_size
                     start = self.timestamp-(self.window_size*10)
                     end = self.timestamp+(self.window_size*10)+1
-                    logger.debug('start=%s, end=%s' % (start, end))
+                    logger.debug('start=%s, end=%s', start, end)
 
                     for timestamp in range(start, end, 10):
                         at_token = self.get_token_at(timestamp)
-                        logger.debug('timestamp=%s, at_token=%s' % (timestamp, at_token))
+                        logger.debug('timestamp=%s, at_token=%s', timestamp, at_token)
                         if at_token == token:
                             self.timestamp = timestamp
                             return True, 'Valid TOTP token within window size used'
@@ -151,7 +151,7 @@ class GAUserSecret:
             current = self.get_token_at(self.counter)
             if token == current:
                 self.counter += 1
-                logger.info('Incremented counter to %s' % self.counter)
+                logger.info('Incremented counter to %s', self.counter)
                 return True, 'Valid HOTP token used'
             else:
                 if self.window_size > 0:
@@ -160,8 +160,8 @@ class GAUserSecret:
                         at_token = self.get_token_at(at_count)
                         logger.debug('Trying with counter=%s; at_token=%s', at_count, at_token)
                         if at_token == token:
-                            logger.info('Incremented counter by %s ticks to %s' %
-                                        (at_count - self.counter, at_count+1))
+                            logger.info('Incremented counter by %s ticks to %s',
+                                        at_count-self.counter, at_count+1)
                             self.counter = at_count+1
                             return True, 'Valid HOTP token within window size used'
 
@@ -188,7 +188,7 @@ class GAUser:
         try:
             secret = self.backends.secret_backend.get_user_secret(self.user, pincode)
         except UserSecretError as ex:
-            logger.debug('Failed to obtain user secret: %s' % ex)
+            logger.debug('Failed to obtain user secret: %s', ex)
             logger.debug('Marking failed timestamp and returning failure')
             state = self.backends.state_backend.get_user_state(self.user)
             # Since we were not able to obtain the secret object, we bluntly
@@ -203,7 +203,7 @@ class GAUser:
         new_state = GAUserState()
 
         # grab the counter from the state and modify user secret with latest counter info
-        logger.debug('state.counter=%s, secret.counter=%s' % (state.counter, secret.counter))
+        logger.debug('state.counter=%s, secret.counter=%s', state.counter, secret.counter)
         if state.counter > secret.counter:
             secret.set_hotp(state.counter)
 
@@ -244,7 +244,7 @@ class GAUser:
 
             new_state.fail_timestamps.append(timestamp)
 
-        logger.debug('used_tokens=%s' % used_tokens)
+        logger.debug('used_tokens=%s', used_tokens)
 
         if len(new_state.fail_timestamps) >= secret.rate_limit[0]:
             success = (False, 'Rate-limit reached, please try again later')
@@ -299,7 +299,7 @@ class GAUser:
         new_state.counter = secret.counter
         self.backends.state_backend.update_user_state(self.user, new_state)
 
-        logger.debug('success=%s' % str(success))
+        logger.debug('success=%s', str(success))
 
         if success[0] is False:
             raise VerifyFailed(success[1])
@@ -331,10 +331,10 @@ class GoogleAuthenticator:
         if len(token) == 8:
             # is it a valid integer?
             try:
-                itoken = int(token)
+                int(token)
                 # let's try to load it as an 8-digit token
                 try:
-                    logger.debug('Trying to verify %s as an 8-digit scratch-token' % itoken)
+                    logger.debug('Trying to verify %s as an 8-digit scratch-token', token)
 
                     success = user.verify_token(token)
                     if self.require_pincode:

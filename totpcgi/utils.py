@@ -97,7 +97,7 @@ def encrypt_secret(strdata, pincode):
               + base64.b64encode(salt).decode('utf-8').replace('\n', '') + '$'
               + base64.b64encode(data+sig).decode('utf-8').replace('\n', ''))
 
-    logger.debug('Encrypted secret: %s' % b64str)
+    logger.debug('Encrypted secret: %s', b64str)
 
     return b64str
 

@@ -51,17 +51,17 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
                 line = line.strip()
 
                 parts = line.split(':')
-                logger.debug('user=%s, hashcode=%s' % (parts[0], parts[1]))
+                logger.debug('user=%s, hashcode=%s', parts[0], parts[1])
                 hashcodes[parts[0]] = parts[1]
 
-            logger.debug('Read %s entries from %s' % 
-                         (len(hashcodes), self.pincode_file))
+            logger.debug('Read %s entries from %s',
+                         len(hashcodes), self.pincode_file)
 
             lockf(fh, LOCK_UN)
             fh.close()
 
         except IOError:
-            logger.debug('%s could not be open for reading' % self.pincode_file)
+            logger.debug('%s could not be open for reading', self.pincode_file)
 
         return hashcodes
 
@@ -72,7 +72,7 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
         if not os.access(self.pincode_file, os.R_OK):
             raise totpcgi.UserNotFound('pincodes file not found!')
 
-        logger.debug('Reading pincode file: %s' % self.pincode_file)
+        logger.debug('Reading pincode file: %s', self.pincode_file)
 
         hashcodes = self._get_all_hashcodes()
 
@@ -87,7 +87,7 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
         hashcodes = self._get_all_hashcodes()
 
         if hashcode is None:
-            logger.debug('Hashcode is None, deleting %s' % user)
+            logger.debug('Hashcode is None, deleting %s', user)
             try:
                 hashcodes.pop(user)
             except KeyError:
@@ -95,7 +95,7 @@ class GAPincodeBackend(totpcgi.backends.GAPincodeBackend):
                 pass
 
         else:
-            logger.debug('Setting new hashcode: %s:%s' % (user, hashcode))
+            logger.debug('Setting new hashcode: %s:%s', user, hashcode)
             hashcodes[user] = hashcode
 
         # Bubble up any write errors up the chain
@@ -120,7 +120,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
     def get_user_secret(self, user, pincode=None):
 
         totp_file = os.path.join(self.secrets_dir, user) + '.totp'
-        logger.debug('Examining user secret file: %s' % totp_file)
+        logger.debug('Examining user secret file: %s', totp_file)
 
         if not os.access(totp_file, os.R_OK):
             raise totpcgi.UserNotFound('%s.totp does not exist or is not readable' % user)
@@ -154,14 +154,14 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
                     if line[2:12] == 'RATE_LIMIT':
                         (tries, seconds) = line[13:].split(' ')
                         gaus.rate_limit = (int(tries), int(seconds))
-                        logger.debug('rate_limit=%s' % str(gaus.rate_limit))
+                        logger.debug('rate_limit=%s', str(gaus.rate_limit))
 
                     elif line[2:13] == 'WINDOW_SIZE':
                         window_size = int(line[14:])
                         if 0 < window_size < 3:
                             window_size = 3
                         gaus.window_size = window_size
-                        logger.debug('window_size=%s' % window_size)
+                        logger.debug('window_size=%s', window_size)
 
                     elif line[2:14] == 'HOTP_COUNTER':
                         # This will most likely be overriden by user state, but load it up anyway,
@@ -171,7 +171,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
                         except ValueError:
                             gaus.set_hotp(0)
 
-                        logger.debug('hotp_counter=%s' % gaus.counter)
+                        logger.debug('hotp_counter=%s', gaus.counter)
 
                 # Scratch code tokens are 8-digit
                 # We ignore scratch tokens if we're using encrypted secret
@@ -199,9 +199,9 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
 
         try:
             fh = open(totp_file, 'w')
-        except IOError as e:
-            raise totpcgi.SaveFailed('%s could not be saved: %s' % 
-                                     (totp_file, e))
+        except IOError as ex:
+            raise totpcgi.SaveFailed('%s could not be saved: %s' %
+                                     (totp_file, ex))
 
         lockf(fh, LOCK_EX)
         secret = gaus.otp.secret
@@ -224,7 +224,7 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
         lockf(fh, LOCK_UN)
         fh.close()
 
-        logger.debug('Wrote %s' % totp_file)
+        logger.debug('Wrote %s', totp_file)
 
     def delete_user_secret(self, user):
         totp_file = os.path.join(self.secrets_dir, user) + '.totp'
@@ -251,7 +251,7 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
 
         # load the state file and keep it locked while we do verification
         state_file = os.path.join(self.state_dir, user) + '.json'
-        logger.debug('Loading user state from: %s' % state_file)
+        logger.debug('Loading user state from: %s', state_file)
         
         # For totpcgiprov and totpcgi to be able to write to the same state
         # file, we have to create it world-writable. Since we have restricted
@@ -262,14 +262,14 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
         # we exclusive-lock the file to prevent race conditions resulting
         # in potential token reuse.
         if os.access(state_file, os.W_OK):
-            logger.debug('%s exists, opening r+' % state_file)
+            logger.debug('%s exists, opening r+', state_file)
             fh = open(state_file, 'r+')
-            logger.debug('Locking state file for user %s' % user)
+            logger.debug('Locking state file for user %s', user)
             lockf(fh, LOCK_EX)
             try:
                 js = json.load(fh)
 
-                logger.debug('loaded state=%s' % js)
+                logger.debug('loaded state=%s', js)
 
                 state.fail_timestamps = js['fail_timestamps']
                 state.success_timestamps = js['success_timestamps']
@@ -283,21 +283,21 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
                 # screw things up, they could have done so without making
                 # the file un-parseable by json -- all they need to do is to
                 # erase the file.
-                logger.debug('Parsing json failed with: %s' % ex)
-                logger.debug('Unlocking state file for user %s' % user)
+                logger.debug('Parsing json failed with: %s', ex)
+                logger.debug('Unlocking state file for user %s', user)
                 lockf(fh, LOCK_UN)
                 raise totpcgi.UserStateError(
                     'Error parsing the state file for: %s' % user)
 
             fh.seek(0)
         else:
-            logger.debug('%s does not exist, opening w' % state_file)
+            logger.debug('%s does not exist, opening w', state_file)
             try:
                 fh = open(state_file, 'w')
             except IOError:
                 raise totpcgi.UserStateError(
                     'Cannot write user state for %s, exiting.' % user)
-            logger.debug('Locking state file for user %s' % user)
+            logger.debug('Locking state file for user %s', user)
             lockf(fh, LOCK_EX)
 
         # The following condition should never happen, in theory,
@@ -316,7 +316,7 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
 
         fh = self.fhs[user]
 
-        logger.debug('fh.name=%s' % fh.name)
+        logger.debug('fh.name=%s', fh.name)
 
         js = {
             'fail_timestamps': state.fail_timestamps,
@@ -325,23 +325,23 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
             'counter': state.counter
         }
 
-        logger.debug('saving state=%s' % js)
+        logger.debug('saving state=%s', js)
 
-        logger.debug('Saving new state for user %s' % user)
+        logger.debug('Saving new state for user %s', user)
         json.dump(js, fh, indent=4)
         fh.truncate()
 
-        logger.debug('Unlocking state file for user %s' % user)
+        logger.debug('Unlocking state file for user %s', user)
         lockf(fh, LOCK_UN)
         fh.close()
 
         del self.fhs[user]
 
-        logger.debug('fhs=%s' % self.fhs)
+        logger.debug('fhs=%s', self.fhs)
 
     def delete_user_state(self, user):
         # this should ONLY be used by test.py
         state_file = os.path.join(self.state_dir, '%s.json' % user)
         if os.access(state_file, os.W_OK):
             os.unlink(state_file)
-            logger.debug('Removed user state file: %s' % state_file)
+            logger.debug('Removed user state file: %s', state_file)

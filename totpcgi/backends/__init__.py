@@ -32,7 +32,7 @@ logger = logging.getLogger('totpcgi')
 class BackendNotSupported(Exception):
     def __init__(self, message):
         Exception.__init__(self, message)
-        logger.debug('!BackendNotSupported: %s' % message)
+        logger.debug('!BackendNotSupported: %s', message)
 
 
 class Backends:
@@ -166,7 +166,7 @@ class GAPincodeBackend:
     def verify_user_pincode(self, user, pincode):
         pass
 
-    def save_user_hashcode(self, user, pincode, makedb=True):
+    def save_user_hashcode(self, user, pincode):
         pass
 
     def delete_user_hashcode(self, user):
@@ -174,7 +174,7 @@ class GAPincodeBackend:
 
     @staticmethod
     def _verify_by_hashcode(pincode, hashcode):
-        logger.debug('Will test against %s' % hashcode)
+        logger.debug('Will test against %s', hashcode)
         from passlib.context import CryptContext
         myctx = CryptContext(schemes=['sha256_crypt', 'sha512_crypt',
                                       'bcrypt', 'md5_crypt'])

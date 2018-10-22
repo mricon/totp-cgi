@@ -1,4 +1,5 @@
-#!/usr/bin/python -tt
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 ##
 # Copyright (C) 2012 by Konstantin Ryabitsev and contributors
 #
@@ -17,31 +18,41 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
 # 02111-1307, USA.
 #
+from __future__ import (absolute_import,
+                        division,
+                        print_function,
+                        with_statement,
+                        unicode_literals)
+
+__author__ = 'Konstantin Ryabitsev <konstantin@linuxfoundation.org>'
+
 import os
 import sys
 import cgi
 import syslog
-import logging
-
-import cgitb
-cgitb.enable()
-
-import pyotp
 
 import totpcgi
 import totpcgi.backends
 import totpcgi.utils
 
 import qrcode
-from qrcode.image import svg
-from StringIO import StringIO
 
 from string import Template
 
 try:
+    from io import StringIO
+except ImportError:
+    # noinspection PyCompatibility
+    from StringIO import StringIO
+
+try:
+    # noinspection PyCompatibility
     from urllib.parse import quote
 except ImportError:
     from urllib import quote
+
+import cgitb
+cgitb.enable()
 
 if len(sys.argv) > 1:
     # blindly assume it's the config file
@@ -49,21 +60,25 @@ if len(sys.argv) > 1:
 else:
     config_file = '/etc/totpcgi/provisioning.conf'
 
-import ConfigParser
+try:
+    import configparser
+except ImportError:
+    import ConfigParser as configparser
 
-config = ConfigParser.RawConfigParser()
-config.read(config_file)
+cfg = ConfigParser.RawConfigParser()
+cfg.read(config_file)
 
 backends = totpcgi.backends.Backends()
 
 try:
-    backends.load_from_config(config)
-except totpcgi.backends.BackendNotSupported, ex:
+    backends.load_from_config(cfg)
+except totpcgi.backends.BackendNotSupported as ex:
     syslog.syslog(syslog.LOG_CRIT,
-            'Backend engine not supported: %s' % ex)
+                  'Backend engine not supported: %s' % ex)
     sys.exit(1)
 
 syslog.openlog('provisioning.cgi', syslog.LOG_PID, syslog.LOG_AUTH)
+
 
 def bad_request(config, why):
     templates_dir = config.get('secret', 'templates_dir')
@@ -86,6 +101,7 @@ def bad_request(config, why):
 
     sys.stdout.write(out)
     sys.exit(0)
+
 
 def show_qr_code(data):
     qr = qrcode.QRCode(
@@ -115,6 +131,7 @@ def show_qr_code(data):
     sys.stdout.write(out)
     sys.exit(0)
 
+
 def show_login_form(config):
     templates_dir = config.get('secret', 'templates_dir')
     fh = open(os.path.join(templates_dir, 'login.html'))
@@ -135,6 +152,7 @@ def show_login_form(config):
 
     sys.stdout.write(out)
     sys.exit(0)
+
 
 def show_reissue_page(config, user):
     templates_dir = config.get('secret', 'templates_dir')
@@ -158,10 +176,12 @@ def show_reissue_page(config, user):
     sys.stdout.write(out)
     sys.exit(0)
 
+
 def show_reissue_denied(config):
     syslog.syslog(syslog.LOG_NOTICE,
-        'Attempt to reissue token when token reissuance disabled')
+                  'Attempt to reissue token when token reissuance disabled')
     bad_request(config, "The ability to reissue tokens is currently disabled.")
+
 
 def show_totp_page(config, user, gaus):
     # generate provisioning URI
@@ -172,16 +192,7 @@ def show_totp_page(config, user, gaus):
         totp_issuer = None
     totp_user = tpt.safe_substitute(username=user)
 
-    if pyotp.VERSION.find('1.3') == 0:
-        # Older versions of pyotp don't deal with issuer_name
-        if totp_issuer is not None:
-            base = '%s:%s' % (totp_issuer, totp_user)
-            totp_qr_uri = gaus.otp.provisioning_uri(base)
-            totp_qr_uri += '&issuer=%s' % quote(totp_issuer)
-        else:
-            totp_qr_uri = gaus.otp.provisioning_uri(totp_user)
-    else:
-        totp_qr_uri = gaus.otp.provisioning_uri(totp_user, issuer_name=totp_issuer)
+    totp_qr_uri = gaus.otp.provisioning_uri(totp_user, issuer_name=totp_issuer)
 
     action_url = config.get('secret', 'action_url')
 
@@ -217,6 +228,7 @@ def show_totp_page(config, user, gaus):
     sys.stdout.write(out)
     sys.exit(0)
 
+
 def generate_secret(config):
     encrypt_secret = config.getboolean('secret', 'encrypt_secret')
     window_size = config.getint('secret', 'window_size')
@@ -224,7 +236,7 @@ def generate_secret(config):
 
     try:
         secret_bits = config.getint('secret', 'bits')
-    except:
+    except configparser.NoOptionError:
         secret_bits = 80
 
     # scratch tokens don't make any sense with encrypted secret
@@ -237,29 +249,29 @@ def generate_secret(config):
     rate_limit = (int(times), int(secs))
 
     gaus = totpcgi.utils.generate_secret(rate_limit, window_size, 
-        scratch_tokens_n, bs=secret_bits)
+                                         scratch_tokens_n, bs=secret_bits)
 
     return gaus
 
 
 def cgimain():
     try:
-        trust_http_auth = config.getboolean('secret', 'trust_http_auth')
-    except ConfigParser.NoOptionError:
+        trust_http_auth = cfg.getboolean('secret', 'trust_http_auth')
+    except configparser.NoOptionError:
         trust_http_auth = False
 
     form = cgi.FieldStorage()
 
     if 'qrcode' in form:
         if not trust_http_auth and os.environ['HTTP_REFERER'].find(os.environ['SERVER_NAME']) == -1:
-            bad_request(config, 'Sorry, you failed the HTTP_REFERER check')
+            bad_request(cfg, 'Sorry, you failed the HTTP_REFERER check')
 
-        qrcode = form.getfirst('qrcode')
-        show_qr_code(qrcode)
+        qrc = form.getfirst('qrcode')
+        show_qr_code(qrc)
 
     remote_host = os.environ['REMOTE_ADDR']
 
-    if trust_http_auth and os.environ.has_key('REMOTE_USER'):
+    if trust_http_auth and 'REMOTE_USER' in os.environ:
         user = os.environ['REMOTE_USER']
         if 'pincode' not in form:
             pincode = None
@@ -267,30 +279,30 @@ def cgimain():
             pincode = form.getfirst('pincode')
 
         syslog.syslog(syslog.LOG_NOTICE,
-            'Using trust-http-auth for user=%s, host=%s' % (user, remote_host))
+                      'Using trust-http-auth for user=%s, host=%s' % (user, remote_host))
 
     else:
         must_keys = ('username', 'pincode')
 
         for must_key in must_keys:
             if must_key not in form:
-                show_login_form(config)
+                show_login_form(cfg)
 
-        user    = form.getfirst('username')
+        user = form.getfirst('username')
         pincode = form.getfirst('pincode')
 
         # start by verifying the pincode
         try:
             backends.pincode_backend.verify_user_pincode(user, pincode)
-        except Exception, ex:
+        except Exception as ex:
             syslog.syslog(syslog.LOG_NOTICE,
-                'Failure: user=%s, host=%s, message=%s' % (user, remote_host,
-                    str(ex)))
-            bad_request(config, str(ex))
+                          'Failure: user=%s, host=%s, message=%s' %
+                          (user, remote_host, str(ex)))
+            bad_request(cfg, str(ex))
 
         # pincode verified
         syslog.syslog(syslog.LOG_NOTICE,
-            'Success: user=%s, host=%s' % (user, remote_host)) 
+                      'Success: user=%s, host=%s' % (user, remote_host))
 
     if 'action' in form:
         action = form.getfirst('action')
@@ -302,55 +314,55 @@ def cgimain():
 
     try:
         backends.secret_backend.get_user_secret(user, pincode)
-    except totpcgi.UserNotFound, ex:
+    except totpcgi.UserNotFound as ex:
         # if we got it, then there isn't an existing secret in place
         exists = False
-    except totpcgi.UserSecretError, ex:
-        bad_request(config, 'Existing secret could not be processed: %s' % ex)
+    except totpcgi.UserSecretError as ex:
+        bad_request(cfg, 'Existing secret could not be processed: %s' % ex)
 
     try:
-        allow_reissue = config.getboolean('secret', 'allow_reissue')
+        allow_reissue = cfg.getboolean('secret', 'allow_reissue')
     except ConfigParser.NoOptionError:
         allow_reissue = True
 
     if exists and action != 'reissue':
         syslog.syslog(syslog.LOG_NOTICE,
-            'Secret exists: user=%s, host=%s' % (user, remote_host))
+                      'Secret exists: user=%s, host=%s' % (user, remote_host))
         # make sure we're allowed to reissue tokens
         if allow_reissue:
-            show_reissue_page(config, user)
+            show_reissue_page(cfg, user)
         else:
-            show_reissue_denied(config)
+            show_reissue_denied(cfg)
 
     if action == 'reissue':
         # make sure we're allowed to reissue
         if not allow_reissue:
-            show_reissue_denied(config)
+            show_reissue_denied(cfg)
 
         # verify token first
         tokencode = form.getfirst('tokencode')
         gau = totpcgi.GAUser(user, backends)
 
         try:
-            status = gau.verify_token(tokencode, pincode)
-        except Exception, ex:
+            gau.verify_token(tokencode, pincode)
+        except Exception as ex:
             syslog.syslog(syslog.LOG_NOTICE,
-                'Token verify failed: user=%s, host=%s, message=%s' % (user,
-                    remote_host, str(ex)))
-            bad_request(config, 'Token verification failed: %s' % str(ex))
+                          'Token verify failed: user=%s, host=%s, message=%s' %
+                          (user, remote_host, str(ex)))
+            bad_request(cfg, 'Token verification failed: %s' % str(ex))
 
         # delete existing token
         try:
             backends.secret_backend.delete_user_secret(user)
-        except Exception, ex:
-            bad_request(config, 'Could not delete existing token for %s: %s'
-                    % (user, str(ex)))
+        except Exception as ex:
+            bad_request(cfg, 'Could not delete existing token for %s: %s' %
+                        (user, str(ex)))
 
     # now generate the secret and store it
-    gaus = generate_secret(config)
+    gaus = generate_secret(cfg)
 
     # if we don't need to encrypt the secret, set pincode to None
-    encrypt_secret = config.getboolean('secret', 'encrypt_secret')
+    encrypt_secret = cfg.getboolean('secret', 'encrypt_secret')
     if not encrypt_secret:
         pincode = None
 
@@ -361,9 +373,8 @@ def cgimain():
     state = totpcgi.GAUserState()
     backends.state_backend.update_user_state(user, state)
 
-    show_totp_page(config, user, gaus)
+    show_totp_page(cfg, user, gaus)
 
 
 if __name__ == '__main__':
     cgimain()
-

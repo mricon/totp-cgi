@@ -4,3 +4,6 @@ pyotp
 bcrypt
 psycopg2_binary
 flup
+python-ldap
+pymysql
+qrcode

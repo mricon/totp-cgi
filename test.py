@@ -115,7 +115,7 @@ def getBackends():
 
 def setCustomPincode(pincode, algo='sha256', user='valid', addjunk=False):
     hashcode = totpcgi.utils.hash_pincode(pincode, algo=algo)
-    logger.debug('generated hashcode=%s' % hashcode)
+    logger.debug('generated hashcode=%s', hashcode)
 
     if addjunk:
         hashcode += ':junk'
@@ -130,13 +130,15 @@ def setCustomPincode(pincode, algo='sha256', user='valid', addjunk=False):
 
     
 def cleanState(user='valid'):
-    logger.debug('Cleaning state for user %s' % user)
+    logger.debug('Cleaning state for user %s', user)
     backends = getBackends()
     backends.state_backend.delete_user_state(user)
+    if 'ldap_user' in os.environ and user != os.environ['ldap_user']:
+        cleanState(user=os.environ['ldap_user'])
 
 
 def setCustomState(state, user='valid'):
-    logger.debug('Setting custom state for user %s' % user)
+    logger.debug('Setting custom state for user %s', user)
     backends = getBackends()
     backends.state_backend.get_user_state(user)
     backends.state_backend.update_user_state(user, state)
@@ -310,9 +312,9 @@ class GATest(unittest.TestCase):
             future_timestamp += 10
             future_token = totp.at(future_timestamp)
 
-        logger.debug('past_token=%s' % past_token)
-        logger.debug('token=%s' % token)
-        logger.debug('future_token=%s' % future_token)
+        logger.debug('past_token=%s', past_token)
+        logger.debug('token=%s', token)
+        logger.debug('future_token=%s', future_token)
 
         # this should work
         self.assertEqual(gau.verify_token(past_token), 
@@ -329,8 +331,8 @@ class GATest(unittest.TestCase):
         # get some tokens from +/- 600 seconds
         past_token = totp.at(int(time.time())-600)
         future_token = totp.at(int(time.time())+600)
-        logger.debug('past_token=%s' % past_token)
-        logger.debug('future_token=%s' % future_token)
+        logger.debug('past_token=%s', past_token)
+        logger.debug('future_token=%s', future_token)
         # this should fail
         with self.assertRaisesRegex(totpcgi.VerifyFailed, 'TOTP token failed to verify'):
             gau.verify_token(past_token)
@@ -599,10 +601,6 @@ class GATest(unittest.TestCase):
         self.assertEqual(ret, 'Scratch-token used')
 
         logger.debug('Testing with pincode+invalid-scratch-code')
-        if PINCODE_BACKEND == 'ldap':
-            raisedmsg = 'LDAP bind failed'
-        else:
-            raisedmsg = 'Pincode did not match'
 
         with self.assertRaisesRegex(totpcgi.VerifyFailed, 'TOTP token failed to verify'):
             ga.verify_user_token(valid_user, pincode+'00000000')
@@ -640,6 +638,11 @@ class GATest(unittest.TestCase):
 
         cleanState()
 
+        if PINCODE_BACKEND == 'ldap':
+            raisedmsg = 'LDAP bind failed'
+        else:
+            raisedmsg = 'Pincode is required'
+
         logger.debug('Testing with valid token but invalid pincode')
         with self.assertRaisesRegex(totpcgi.UserPincodeError, raisedmsg):
             ga.verify_user_token(valid_user, 'blarg'+tokencode)
@@ -657,25 +660,34 @@ class GATest(unittest.TestCase):
             ga.verify_user_token(valid_user, pincode+'555555')
 
     def testEncryptedSecret(self):
+        if PINCODE_BACKEND in 'ldap':
+            valid_user = os.environ['ldap_user']
+            pincode = os.environ['ldap_password']
+        else:
+            pincode = 'wakkawakka'
+            valid_user = 'encrypted'
+            setCustomPincode(pincode, user=valid_user)
+
         logger.debug('Running testEncryptedSecret')
 
         backends = getBackends()
         ga = totpcgi.GoogleAuthenticator(backends)
 
-        pincode = 'wakkawakka'
-        setCustomPincode(pincode, user='encrypted')
-
         totp = pyotp.TOTP(VALID_SECRET)
         token = str(totp.now()).zfill(6)
 
-        ga.verify_user_token('encrypted', pincode+token)
+        ga.verify_user_token(valid_user, pincode+token)
 
         # This should fail, as we ignore scratch tokens with encrypted secrets
         with self.assertRaisesRegex(totpcgi.VerifyFailed,
                                     'Not a valid scratch-token'):
-            ga.verify_user_token('encrypted', pincode+'12345678')
+            ga.verify_user_token(valid_user, pincode+'12345678')
 
-        cleanState(user='encrypted')
+        cleanState(user=valid_user)
+
+        # We don't need to run this for ldap
+        if PINCODE_BACKEND in 'ldap':
+            return
 
         setCustomPincode(pincode, user='encrypted-bad')
         with self.assertRaisesRegex(totpcgi.UserSecretError,
@@ -713,6 +725,9 @@ if __name__ == '__main__':
     gaus = totpcgi.utils.generate_secret(rate_limit=(4, 30))
     be.secret_backend.save_user_secret('valid', gaus)
 
+    if 'ldap_user' in os.environ:
+        be.secret_backend.save_user_secret(os.environ['ldap_user'], gaus)
+
     VALID_SECRET = gaus.otp.secret
     VALID_SCRATCH_TOKENS = gaus.scratch_tokens
 
@@ -739,7 +754,10 @@ if __name__ == '__main__':
     try:
         unittest.main()
     finally:
-        for username in ('valid', 'invalid', 'encrypted', 'encrypted-bad', 'hotp'):
+        test_users = ['valid', 'invalid', 'encrypted', 'encrypted-bad', 'hotp']
+        if 'ldap_user' in os.environ:
+            test_users.append(os.environ['ldap_user'])
+        for username in test_users:
             be.state_backend.delete_user_state(username)
             be.secret_backend.delete_user_secret(username)
             pass
