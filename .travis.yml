@@ -15,7 +15,7 @@ install:
 
 script:
  - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then python test.py; fi
- - if [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then python test.py -v --locals; fi
+ - if [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then python test.py; fi
  - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then python test.py -v --locals; fi
 
 notifications:
