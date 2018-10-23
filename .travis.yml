@@ -1,0 +1,17 @@
+language: python
+
+python:
+  - 2.7
+  - 3.4
+  - 3.6
+cache: pip
+virtualenv:
+    system_site_package: true
+install:
+ - pip install -r requirements-dev.txt
+script:
+ - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then python test.py; fi
+ - if [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then python -v --locals; fi
+notifications:
+  email:
+    - konstantin@linuxfoundation.org

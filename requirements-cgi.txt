@@ -2,3 +2,5 @@ pycryptodome
 passlib
 pyotp
 bcrypt
+flup
+qrcode

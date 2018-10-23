@@ -1,0 +1,9 @@
+pycryptodome
+passlib
+pyotp
+bcrypt
+flup
+qrcode
+python-ldap
+pymysql
+psycopg2_binary

@@ -61,8 +61,7 @@ logger.setLevel(logging.DEBUG)
 
 ch = logging.FileHandler('test.log')
 ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter("[%(levelname)s:%(funcName)s:"
-                              "%(lineno)s] %(message)s")
+formatter = logging.Formatter("[%(asctime)s] {%(module)s:%(funcName)s:%(lineno)s} %(message)s")
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
@@ -460,11 +459,6 @@ class GATest(unittest.TestCase):
         with self.assertRaisesRegex(totpcgi.VerifyFailed, 'been used once'):
             gau.verify_token(validtoken)
 
-        logger.debug('Testing with a token that is too long')
-        with self.assertRaisesRegex(totpcgi.VerifyFailed, 'too long'):
-            cleanState()
-            gau.verify_token('12345678910')
-
         logger.debug('Testing with a non-integer token')
         with self.assertRaisesRegex(totpcgi.VerifyFailed, 'not an integer'):
             cleanState()
@@ -519,7 +513,7 @@ class GATest(unittest.TestCase):
 
         pincode = 'wakkawakka'
         secret = backends.secret_backend.get_user_secret(gau.user)
-        tokencode = str(secret.get_totp_token()).zfill(6)
+        tokencode = secret.get_totp_token()
 
         token = pincode + tokencode
 
@@ -600,9 +594,13 @@ class GATest(unittest.TestCase):
         ret = ga.verify_user_token(valid_user, pincode+VALID_SCRATCH_TOKENS[0])
         self.assertEqual(ret, 'Scratch-token used')
 
+        logger.debug('Testing with pincode+scratch-code (starting with 00)')
+        ret = ga.verify_user_token(valid_user, pincode+VALID_SCRATCH_TOKENS[1])
+        self.assertEqual(ret, 'Scratch-token used')
+
         logger.debug('Testing with pincode+invalid-scratch-code')
 
-        with self.assertRaisesRegex(totpcgi.VerifyFailed, 'TOTP token failed to verify'):
+        with self.assertRaisesRegex(totpcgi.VerifyFailed, 'Not a valid scratch-token'):
             ga.verify_user_token(valid_user, pincode+'00000000')
 
         cleanState()
@@ -641,12 +639,17 @@ class GATest(unittest.TestCase):
         if PINCODE_BACKEND == 'ldap':
             raisedmsg = 'LDAP bind failed'
         else:
-            raisedmsg = 'Pincode is required'
+            raisedmsg = 'Pincode did not match'
 
         logger.debug('Testing with valid token but invalid pincode')
         with self.assertRaisesRegex(totpcgi.UserPincodeError, raisedmsg):
             ga.verify_user_token(valid_user, 'blarg'+tokencode)
 
+        # Refresh our token to grab the latest
+        totp = pyotp.TOTP(VALID_SECRET)
+        tokencode = str(totp.now()).zfill(6)
+        token = pincode + tokencode
+        logger.debug('Latest token=%s', token)
         logger.debug('Testing again with valid token and valid pincode')
         with self.assertRaisesRegex(totpcgi.VerifyFailed,
                                     'already been used'):
@@ -723,6 +726,9 @@ if __name__ == '__main__':
 
     # valid user
     gaus = totpcgi.utils.generate_secret(rate_limit=(4, 30))
+
+    # make the 2nd scratch token start with 00
+    gaus.scratch_tokens[1] = '00' + gaus.scratch_tokens[1][2:]
     be.secret_backend.save_user_secret('valid', gaus)
 
     if 'ldap_user' in os.environ:

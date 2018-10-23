@@ -250,42 +250,36 @@ class GAUser:
             success = (False, 'Rate-limit reached, please try again later')
 
         else:
-            # Is this token valid at all?
-            if len(str(token)) > 8:
-                success = (False, 'Token is too long')
-            else:
-                try:
-                    itoken = int(token)
-                except ValueError:
-                    success = (False, 'Token is not an integer')
-                    itoken = -1
+            try:
+                itoken = int(token)
+            except ValueError:
+                success = (False, 'Token is not an integer')
+                itoken = -1
 
-                # Is this a scratch-code token?
-                if itoken > 999999:
-                    logger.debug('A scratch-code token is used')
+            if len(str(token)) >= 8 and itoken >= 0:
+                # Try to verify as a scratch token
+                # has it been used before?
+                if token in state.used_scratch_tokens:
+                    success = (False, 'Scratch-token already used once')
+                elif not secret.verify_scratch_token(token):
+                    # we get out early, without updating state, since we
+                    # will retry this as a pincode+6-digit token and the
+                    # failure will be recorded at that step.
+                    self.backends.state_backend.update_user_state(
+                        self.user, state)
+                    raise VerifyFailed('Not a valid scratch-token')
+                else:
+                    success = (True, 'Scratch-token used')
+                    new_state.used_scratch_tokens.append(token)
 
-                    # has it been used before?
-                    if token in state.used_scratch_tokens:
-                        success = (False, 'Scratch-token already used once')
-                    elif not secret.verify_scratch_token(token):
-                        # we get out early, without updating state, since we
-                        # will retry this as a pincode+6-digit token and the
-                        # failure will be recorded at that step.
-                        self.backends.state_backend.update_user_state(
-                            self.user, state)
-                        raise VerifyFailed('Not a valid scratch-token')
-                    else:
-                        success = (True, 'Scratch-token used')
-                        new_state.used_scratch_tokens.append(token)
+            elif itoken >= 0:
+                logger.debug('A regular token is used')
 
-                elif itoken >= 0:
-                    logger.debug('A regular token is used')
-
-                    # has it been used before?
-                    if not secret.is_hotp() and token in used_tokens:
-                        success = (False, 'Token has already been used once')
-                    else:
-                        success = secret.verify_token(token)
+                # has it been used before?
+                if not secret.is_hotp() and token in used_tokens:
+                    success = (False, 'Token has already been used once')
+                else:
+                    success = secret.verify_token(token)
 
             # Adjust state accordingly
             if success[0] is True:
