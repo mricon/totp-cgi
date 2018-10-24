@@ -16,13 +16,6 @@
 -- 02111-1307, USA.
 --
 
--- CHANGE THE PASSWORDS, OBVIOUSLY!
-CREATE USER IF NOT EXISTS 'totpcgi'@'%' IDENTIFIED BY 'wakkawakka';
-CREATE USER IF NOT EXISTS 'totpcgi_admin'@'%' IDENTIFIED BY 'bokkabokka';
-
-CREATE DATABASE IF NOT EXISTS totpcgi;
-USE totpcgi;
-
 -- Used by all backends
 
 CREATE TABLE IF NOT EXISTS users (
