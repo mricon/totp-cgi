@@ -382,7 +382,8 @@ class GATest(unittest.TestCase):
 
         # Valid token should work, too
         setCustomState(state)
-        self.assertEqual(gau.verify_token(secret.get_totp_token()), 'Valid TOTP token used')
+        ret = gau.verify_token(secret.get_totp_token())
+        self.assertIn(ret, ('Valid TOTP token used', 'Valid TOTP token within window size used'))
 
     def testHOTPRateLimit(self):
         logger.debug('Running testHOTPRateLimit')
