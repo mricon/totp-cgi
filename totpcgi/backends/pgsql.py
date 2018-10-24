@@ -114,7 +114,9 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
               FROM used_scratch_tokens
              WHERE userid = %s''', (userid,))
 
-        for (token,) in cur.fetchall():
+        for (itoken,) in cur.fetchall():
+            token = str(itoken).zfill(8)
+            logger.debug('Found a used scratch token: %s', token)
             state.used_scratch_tokens.append(token)
 
         # Now try to load counter info, if we have that table
@@ -279,7 +281,9 @@ class GASecretBackend(totpcgi.backends.GASecretBackend):
               JOIN users AS u USING (userid)
              WHERE u.username = %s''', (user,))
         
-        for (token,) in cur.fetchall():
+        for (itoken,) in cur.fetchall():
+            token = str(itoken).zfill(8)
+            logger.debug('Adding a scratch token: %s', token)
             gaus.scratch_tokens.append(token)
 
         return gaus

@@ -7,12 +7,13 @@ fi
 echo "Running File backend tests"
 python test.py $TEST_FLAGS
 E_FILE=$?
-echo -en 'travis_fold:start:File_backend\\r'
+echo "Exited with $E_FILE"
+echo 'travis_fold:start:File_backend'
 cat test.log
-echo -en 'travis_fold:end:File_backend\\r'
-
+echo 'travis_fold:end:File_backend'
 rm -f test.log
 
+echo
 echo "Running MySQL backend tests"
 mysql -e 'CREATE DATABASE totpcgi;'
 mysql totpcgi < contrib/mysql.sql
@@ -22,22 +23,24 @@ mysql_connect_host='localhost' \
     mysql_connect_password='' \
     python test.py $TEST_FLAGS
 E_MYSQL=$?
-echo -en 'travis_fold:start:MySQL_backend\\r'
+echo "Exited with $E_MYSQL"
+echo 'travis_fold:start:MySQL_backend'
 cat test.log
-echo -en 'travis_fold:end:MySQL_backend\\r'
-
+echo 'travis_fold:end:MySQL_backend'
 rm -f test.log
 
+echo
 echo "Running PostgreSQL backend tests"
 psql -U postgres -c 'create database totpcgi;'
 psql -U postgres -d totpcgi -a -f contrib/postgres.sql
 pg_connect_string='postgresql://localhost/totpcgi' \
     python test.py $TEST_FLAGS
 E_PSQL=$?
-echo -en 'travis_fold:start:PostgreSQL_backend\\r'
+echo "Exited with $E_PSQL"
+echo 'travis_fold:start:PostgreSQL_backend'
 cat test.log
-echo -en 'travis_fold:end:PostgreSQL_backend\\r'
+echo 'travis_fold:end:PostgreSQL_backend'
 
-if [ $E_FILE -gt 0 -o $E_MYSQL -gt 0 -o $E_PSQL -gt 0]; then
+if [ $E_FILE -gt 0 -o $E_MYSQL -gt 0 -o $E_PSQL -gt 0 ]; then
     exit 1
 fi
