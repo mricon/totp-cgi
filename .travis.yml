@@ -17,7 +17,7 @@ install:
  - pip install -r requirements-dev.txt
 
 script:
- - sh .travis.sh
+ - bash .travis.sh
 
 notifications:
   email:
