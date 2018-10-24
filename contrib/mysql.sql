@@ -17,14 +17,16 @@
 --
 
 -- CHANGE THE PASSWORDS, OBVIOUSLY!
-use totpcgi;
-CREATE USER 'totpcgi'@'%' IDENTIFIED BY 'wakkawakka';
-CREATE USER 'totpcgi_admin'@'%' IDENTIFIED BY 'bokkabokka';
+CREATE USER IF NOT EXISTS 'totpcgi'@'%' IDENTIFIED BY 'wakkawakka';
+CREATE USER IF NOT EXISTS 'totpcgi_admin'@'%' IDENTIFIED BY 'bokkabokka';
+
+CREATE DATABASE IF NOT EXISTS totpcgi;
+USE totpcgi;
 
 -- Used by all backends
 
-CREATE TABLE users (
-  userid   INTEGER NOT NULL PRIMARY KEY AUTO_INCREMENT, 
+CREATE TABLE IF NOT EXISTS users (
+  userid   INTEGER NOT NULL PRIMARY KEY AUTO_INCREMENT,
   username VARCHAR(255) NOT NULL,
     CONSTRAINT users_uniq UNIQUE (username)
 );
@@ -33,7 +35,7 @@ GRANT SELECT, INSERT, DELETE ON users TO totpcgi_admin;
 
 -- Used by the state backend
 
-CREATE TABLE timestamps (
+CREATE TABLE IF NOT EXISTS timestamps (
   userid    INTEGER NOT NULL REFERENCES users ON DELETE CASCADE,
   success   BOOLEAN NOT NULL,
   timestamp INTEGER NOT NULL
@@ -41,14 +43,14 @@ CREATE TABLE timestamps (
 GRANT SELECT, INSERT, DELETE ON timestamps TO totpcgi;
 GRANT SELECT, INSERT, DELETE ON timestamps TO totpcgi_admin;
 
-CREATE TABLE used_scratch_tokens (
+CREATE TABLE IF NOT EXISTS used_scratch_tokens (
   userid INTEGER NOT NULL REFERENCES users ON DELETE CASCADE,
   token  INTEGER NOT NULL
 );
 GRANT SELECT, INSERT, DELETE ON used_scratch_tokens TO totpcgi;
 GRANT SELECT, INSERT, DELETE ON used_scratch_tokens TO totpcgi_admin;
 
-CREATE TABLE counters (
+CREATE TABLE IF NOT EXISTS counters (
   userid  INTEGER NOT NULL REFERENCES users ON DELETE CASCADE,
   counter INTEGER NOT NULL,
   CONSTRAINT counters_uniq UNIQUE (userid, counter)
@@ -58,7 +60,7 @@ GRANT SELECT, INSERT, DELETE ON counters TO totpcgi_admin;
 
 -- Used by the secrets backend
 
-CREATE TABLE secrets (
+CREATE TABLE IF NOT EXISTS secrets (
     userid             INTEGER      NOT NULL REFERENCES users ON DELETE CASCADE,
     secret             VARCHAR(255) NOT NULL,
     rate_limit_times   INTEGER DEFAULT 3,
@@ -69,7 +71,7 @@ CREATE TABLE secrets (
 GRANT SELECT                         ON secrets TO totpcgi;
 GRANT SELECT, INSERT, UPDATE, DELETE ON secrets TO totpcgi_admin;
 
-CREATE TABLE scratch_tokens (
+CREATE TABLE IF NOT EXISTS scratch_tokens (
     userid INTEGER NOT NULL REFERENCES users ON DELETE CASCADE,
     token  INTEGER
 );
@@ -78,10 +80,12 @@ GRANT SELECT, INSERT, DELETE ON scratch_tokens TO totpcgi_admin;
 
 -- Used by the pincodes backend
 
-CREATE TABLE pincodes (
+CREATE TABLE IF NOT EXISTS pincodes (
     userid INTEGER NOT NULL REFERENCES users ON DELETE CASCADE,
     pincode VARCHAR(1024) NOT NULL,
     CONSTRAINT pincodes_uniq UNIQUE (userid)
 );
 GRANT SELECT                         ON pincodes TO totpcgi;
 GRANT SELECT, INSERT, UPDATE, DELETE ON pincodes TO totpcgi_admin;
+
+FLUSH PRIVILEGES;

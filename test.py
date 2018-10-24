@@ -147,8 +147,9 @@ def getValidUser():
     logger.debug('Setting up user valid')
     backends = getBackends()
     gau = totpcgi.GAUser('valid', backends)
-    with open(os.path.join(secrets_dir, 'valid.totp'), 'r') as fh:
-        logger.debug('valid.totp follows\n%s', fh.read())
+    if SECRET_BACKEND == 'File':
+        with open(os.path.join(secrets_dir, 'valid.totp'), 'r') as fh:
+            logger.debug('valid.totp follows\n%s', fh.read())
     return gau
 
 
