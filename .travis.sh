@@ -61,6 +61,6 @@ echo 'travis_fold:start:LDAP_backend'
 cat test.log
 echo 'travis_fold:end:LDAP_backend'
 
-if [ $E_FILE -gt 0 -o $E_MYSQL -gt 0 -o $E_PSQL -gt 0 -o $E_LDAP -gt 0]; then
+if [ $E_FILE -gt 0 -o $E_MYSQL -gt 0 -o $E_PSQL -gt 0 -o $E_LDAP -gt 0 ]; then
     exit 1
 fi
