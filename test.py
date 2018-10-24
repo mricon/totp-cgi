@@ -763,7 +763,7 @@ if __name__ == '__main__':
         unittest.main()
     finally:
         test_users = ['valid', 'invalid', 'encrypted', 'encrypted-bad', 'hotp']
-        if 'ldap_user' in os.environ:
+        if 'ldap_user' in os.environ and os.environ['ldap_user'] not in test_users:
             test_users.append(os.environ['ldap_user'])
         for username in test_users:
             be.state_backend.delete_user_state(username)

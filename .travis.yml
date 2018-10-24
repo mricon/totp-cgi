@@ -12,6 +12,13 @@ virtualenv:
 
 services:
  - mysql
+ - postgresql
+
+addons:
+  apt:
+    packages:
+      - ldap-utils
+      - slapd
 
 install:
  - pip install -r requirements-dev.txt

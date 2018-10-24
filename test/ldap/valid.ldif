@@ -1,0 +1,8 @@
+dn: cn=valid,dc=example,dc=com
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+objectClass: top
+cn: valid
+sn: valid
+userPassword: wakkawakka

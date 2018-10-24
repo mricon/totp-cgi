@@ -40,7 +40,27 @@ echo "Exited with $E_PSQL"
 echo 'travis_fold:start:PostgreSQL_backend'
 cat test.log
 echo 'travis_fold:end:PostgreSQL_backend'
+rm -f test.log
 
-if [ $E_FILE -gt 0 -o $E_MYSQL -gt 0 -o $E_PSQL -gt 0 ]; then
+echo
+echo "Running LDAP backend tests"
+mkdir /tmp/slapd
+slapd -f test/ldap/slapd.conf -h ldap://localhost:3389 &
+sleep 3
+ldapadd -h localhost:3389 -D cn=admin,dc=example,dc=com -w test -f test/ldap/base.ldif
+ldapadd -h localhost:3389 -D cn=admin,dc=example,dc=com -w test -f test/ldap/valid.ldif
+ldap_url='ldap://localhost:3389' \
+    ldap_dn='cn=$username,dc=example,dc=com' \
+    ldap_cacert='' \
+    ldap_user='valid' \
+    ldap_password='wakkawakka' \
+    python test.py $TEST_FLAGS
+E_LDAP=$?
+echo "Exited with $E_LDAP"
+echo 'travis_fold:start:LDAP_backend'
+cat test.log
+echo 'travis_fold:end:LDAP_backend'
+
+if [ $E_FILE -gt 0 -o $E_MYSQL -gt 0 -o $E_PSQL -gt 0 -o $E_LDAP -gt 0]; then
     exit 1
 fi
