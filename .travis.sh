@@ -32,7 +32,7 @@ rm -f test.log
 echo
 echo "Running PostgreSQL backend tests"
 psql -U postgres -c 'create database totpcgi;'
-psql -U postgres -d totpcgi -a -f contrib/postgres.sql
+psql -U postgres -d totpcgi -f contrib/postgres.sql
 pg_connect_string='postgresql://localhost/totpcgi' \
     python test.py $TEST_FLAGS
 E_PSQL=$?
