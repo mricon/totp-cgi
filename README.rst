@@ -10,7 +10,7 @@ A centralized totp solution based on google-authenticator
 :Author:    mricon@kernel.org
 :Copyright: Konstantin Ryabitsev and contributors
 :License:   GPLv2+
-:Version:   0.6.0
+:Version:   0.7.0
 
 DECRIPTION
 ----------

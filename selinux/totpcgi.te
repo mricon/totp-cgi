@@ -48,19 +48,28 @@ files_dontaudit_list_tmp(totpcgi_script_t)
 files_dontaudit_list_tmp(totpcgi_provisioning_script_t)
 
 # This should be upstream, really.
-allow httpd_suexec_t httpd_t:unix_stream_socket { read write };
-#
+optional_policy(`
+    require {
+        type httpd_t;
+        type httpd_suexec_t;
+    }
+    allow httpd_suexec_t httpd_t:unix_stream_socket { read write };
+')
+
 # Allow binding to ldap
 sysnet_dns_name_resolve(totpcgi_script_t)
-miscfiles_read_generic_certs(totpcgi_script_t)
 sysnet_use_ldap(totpcgi_script_t)
 sysnet_dns_name_resolve(totpcgi_provisioning_script_t)
-miscfiles_read_generic_certs(totpcgi_provisioning_script_t)
 sysnet_use_ldap(totpcgi_provisioning_script_t)
 
+miscfiles_read_generic_certs(totpcgi_script_t)
+miscfiles_read_generic_certs(totpcgi_provisioning_script_t)
+
 # Allow connecting to postgresql
-postgresql_tcp_connect(totpcgi_script_t)
-postgresql_stream_connect(totpcgi_script_t)
-postgresql_tcp_connect(totpcgi_provisioning_script_t)
-postgresql_stream_connect(totpcgi_provisioning_script_t)
+optional_policy(`
+    postgresql_tcp_connect(totpcgi_script_t)
+    postgresql_stream_connect(totpcgi_script_t)
+    postgresql_tcp_connect(totpcgi_provisioning_script_t)
+    postgresql_stream_connect(totpcgi_provisioning_script_t)
+')
 
