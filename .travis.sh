@@ -1,6 +1,6 @@
 #!/bin/bash
 TEST_FLAGS=''
-if [ $TRAVIS_PYTHON_VERSION == '3.6' ]; then
+if [ $TRAVIS_PYTHON_VERSION == '3.6' -o $TRAVIS_PYTHON_VERSION == '3.7' ]; then
     TEST_FLAGS='-v --locals'
 fi
 
