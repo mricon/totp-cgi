@@ -3,8 +3,9 @@ TOTPCGI
 ---------------------------------------------------------
 A centralized totp solution based on google-authenticator
 ---------------------------------------------------------
-
-[![Build Status](https://travis-ci.org/mricon/totp-cgi.png)](https://travis-ci.org/mricon/totp-cgi)
+.. image:: https://travis-ci.org/mricon/totp-cgi.svg?branch=master
+   :target: https://travis-ci.org/mricon/totp-cgi
+   :alt: Build Status
 
 :Author:    mricon@kernel.org
 :Copyright: Konstantin Ryabitsev and contributors
