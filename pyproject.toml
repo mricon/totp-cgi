@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "totpcgi"
-version = "0.7.0"
+version = "0.7.1"
 description = "A centralized hotp/totp solution based on google-authenticator"
 readme = "README.rst"
 requires-python = ">=3.9"
@@ -13,7 +13,6 @@ authors = [
     { name = "Konstantin Ryabitsev", email = "mricon@kernel.org" },
 ]
 dependencies = [
-    "pycryptodome",
     "passlib",
     "pyotp",
     "bcrypt",
@@ -21,6 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 cgi = ["flup", "qrcode"]
+encrypted-secret = ["pycryptodome"]
 ldap = ["python-ldap"]
 mysql = ["pymysql"]
 pgsql = ["psycopg2-binary"]

@@ -27,8 +27,11 @@ import struct
 
 import totpcgi
 
-from Crypto.Cipher import AES
 from passlib.crypto.digest import pbkdf2_hmac
+
+# Crypto.Cipher (pycryptodome) is imported lazily inside encrypt_secret() /
+# decrypt_secret() so deployments that don't use the encrypted-secret feature
+# don't need pycryptodome installed at all.
 
 logger = logging.getLogger('totpcgi')
 
@@ -80,6 +83,8 @@ def generate_secret(rate_limit=(3, 30), window_size=3, scratch_tokens=5, bs=80):
 
 
 def encrypt_secret(strdata, pincode):
+    from Crypto.Cipher import AES
+
     data = strdata.encode('utf-8')
     salt = os.urandom(SALT_SIZE)
 
@@ -108,6 +113,8 @@ def encrypt_secret(strdata, pincode):
 
 
 def decrypt_secret(b64str, pincode):
+    from Crypto.Cipher import AES
+
     # split the secret into components
     try:
         (scheme, salt, ciphertext) = b64str.split('$')

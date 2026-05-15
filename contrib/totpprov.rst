@@ -9,7 +9,7 @@ Simple provisioning script for totpcgi
 :Date:      2013-09-20
 :Copyright: Linux Foundation and contributors
 :License:   GPLv2+
-:Version:   0.7.0
+:Version:   0.7.1
 :Manual section: 1
 
 SYNOPSIS
