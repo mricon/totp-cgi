@@ -3,17 +3,42 @@ TOTPCGI
 ---------------------------------------------------------
 A centralized totp solution based on google-authenticator
 ---------------------------------------------------------
-.. image:: https://travis-ci.org/mricon/totp-cgi.svg?branch=master
-   :target: https://travis-ci.org/mricon/totp-cgi
-   :alt: Build Status
 
 :Author:    mricon@kernel.org
 :Copyright: Konstantin Ryabitsev and contributors
 :License:   GPLv2+
 :Version:   0.7.0
 
-DECRIPTION
-----------
+PROJECT STATUS: LIFE SUPPORT
+----------------------------
+**You should almost certainly not be deploying this for a new project.**
+
+totpcgi was first written in 2012 and has not received meaningful new
+development since 2019. It is kept buildable on currently-supported
+distributions (AlmaLinux 10 / RHEL 10 / Python 3.12) for the benefit of
+existing deployments only. New features are not planned; bug fixes are
+best-effort.
+
+If you are reaching for this in 2026, please look elsewhere first:
+
+* For SSH 2-factor authentication, prefer FIDO2 / WebAuthn hardware
+  tokens (e.g. yubikey) with ``ssh-ed25519-sk`` / ``ssh-ecdsa-sk`` keys.
+* For PAM TOTP, Google's ``pam_google_authenticator`` is actively
+  maintained and lives in most distro repos.
+* For a full enterprise 2FA / OTP server, ``privacyIDEA`` is the
+  modern, actively-developed equivalent of what totpcgi does.
+
+KNOWN LIMITATIONS
+-----------------
+* **Python 3.13+ is not supported.** The CGI scripts use the stdlib
+  ``cgi`` and ``cgitb`` modules, which were removed outright from
+  Python 3.13 per PEP 594. The project works on Python 3.12 (the
+  version shipped by AlmaLinux 10 / RHEL 10) but will fail to import
+  on any newer interpreter without significant rework. There is
+  currently no plan to do that rework — see "life support", above.
+
+DESCRIPTION
+-----------
 The idea of totpcgi (pronounced "Toopy-CGI") came when lamenting that
 google-authenticator implementation is "almost there" to be used as a
 generic org-wide 2-factor solution, but is annoyingly written to be a
