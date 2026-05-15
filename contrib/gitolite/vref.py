@@ -1,10 +1,11 @@
-#!/usr/bin/python -tt
+#!/usr/bin/python3
 __author__ = 'mricon'
 
+import json
 import logging
 import os
 import sys
-import anyjson
+
 import netaddr
 
 import datetime
@@ -31,10 +32,10 @@ def gl_fail_exit():
 
 
 def print_help_link():
-    print
+    print('')
     print('If you need more help, please see the following link:')
     print('    %s' % HELP_DOC_LINK)
-    print
+    print('')
 
 
 def how_to_enroll():
@@ -115,7 +116,7 @@ def load_authorized_ips():
             fh = open(valfile, 'r')
             jdata = fh.read()
             fh.close()
-            valdata = anyjson.deserialize(jdata)
+            valdata = json.loads(jdata)
         except:
             logger.critical('Validations file exists, but could not be parsed!')
             logger.critical('Please rerun "2fa val" to create a new file!')

@@ -42,20 +42,25 @@ def hash_pincode(pincode, algo='bcrypt'):
     if algo not in ('bcrypt', 'sha256', 'sha512', 'md5'):
         raise ValueError('Unsupported algorithm: %s' % algo)
 
+    # bcrypt is handled directly because passlib 1.7.x is incompatible with
+    # bcrypt >= 4.1 (its startup self-check trips the 72-byte limit).
+    if algo == 'bcrypt':
+        import bcrypt
+        return bcrypt.hashpw(
+            pincode.encode('utf-8'),
+            bcrypt.gensalt(),
+        ).decode('utf-8')
+
     import passlib.hash
 
-    # if you want higher computational cost, just use bcrypt
     if algo == 'sha256':
         return passlib.hash.sha256_crypt.hash(pincode)
 
     if algo == 'sha512':
         return passlib.hash.sha512_crypt.hash(pincode)
 
-    if algo == 'md5':
-        # really? Okay.
-        return passlib.hash.md5_crypt.hash(pincode)
-
-    return passlib.hash.bcrypt.hash(pincode)
+    # md5 — really? Okay.
+    return passlib.hash.md5_crypt.hash(pincode)
 
 
 def generate_secret(rate_limit=(3, 30), window_size=3, scratch_tokens=5, bs=80):

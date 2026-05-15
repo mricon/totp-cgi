@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 ##
 # Copyright (C) 2012 by Konstantin Ryabitsev and contributors
@@ -18,12 +18,6 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
 # 02111-1307, USA.
 #
-from __future__ import (absolute_import,
-                        division,
-                        print_function,
-                        with_statement,
-                        unicode_literals)
-
 __author__ = 'Konstantin Ryabitsev <konstantin@linuxfoundation.org>'
 
 import unittest
@@ -497,7 +491,7 @@ class GATest(unittest.TestCase):
         os.environ['QUERY_STRING'] = 'user=bupkis&token=555555&mode=PAM_SM_AUTH'
         os.environ['PYTHONPATH'] = '.'
 
-        command = ['env', 'python', 'cgi/totp.cgi', 'conf/totpcgi.conf']
+        command = [sys.executable, 'cgi/totp.cgi', 'conf/totpcgi.conf']
 
         ret = subprocess.check_output(command).decode('utf-8')
 

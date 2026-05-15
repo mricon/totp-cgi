@@ -1,15 +1,11 @@
-#!/usr/bin/python -tt
+#!/usr/bin/python3
 __author__ = 'mricon'
 
+import json
 import logging
 import os
 import sys
-import anyjson
-
-import totpcgi
-import totpcgi.backends
-import totpcgi.backends.file
-import totpcgi.utils
+import syslog
 
 import datetime
 import dateutil
@@ -19,8 +15,12 @@ import dateutil.tz
 import netaddr
 
 from string import Template
+from urllib.parse import quote_plus
 
-import syslog
+import totpcgi
+import totpcgi.backends
+import totpcgi.backends.file
+import totpcgi.utils
 
 #--------------- CHANGE ME TO REFLECT YOUR ENVIRONMENT -------------------
 
@@ -144,20 +144,19 @@ def get_geoip_crc(ipaddr):
         city = region_name = country_code = 'Unknown'
 
         if ginfo['city'] is not None:
-            city = unicode(ginfo['city'], 'iso-8859-1')
+            city = ginfo['city']
         if ginfo['region_name'] is not None:
-            region_name = unicode(ginfo['region_name'], 'iso-8859-1')
+            region_name = ginfo['region_name']
         if ginfo['country_code'] is not None:
-            country_code = unicode(ginfo['country_code'], 'iso-8859-1')
+            country_code = ginfo['country_code']
 
-        crc = u'%s, %s, %s' % (city, region_name, country_code)
+        crc = '%s, %s, %s' % (city, region_name, country_code)
 
     else:
         # try just the country code, then
         crc = gi.country_code_by_addr(ipaddr)
         if not crc:
             return None
-        crc = unicode(crc, 'iso-8859-1')
 
     return crc
 
@@ -177,7 +176,7 @@ def load_authorized_ips():
     user = os.environ['GL_USER']
     val_dir = os.path.join(os.environ['GL_ADMIN_BASE'], '2fa/validations')
     if not os.path.exists(val_dir):
-        os.makedirs(val_dir, 0700)
+        os.makedirs(val_dir, 0o700)
         logger.debug('Created val_dir in %s' % val_dir)
 
     valfile = os.path.join(val_dir, '%s.js' % user)
@@ -189,7 +188,7 @@ def load_authorized_ips():
             fh = open(valfile, 'r')
             jdata = fh.read()
             fh.close()
-            valdata = anyjson.deserialize(jdata)
+            valdata = json.loads(jdata)
         except:
             logger.critical('Validations file exists, but could not be parsed!')
             logger.critical('All previous validations have been lost, starting fresh.')
@@ -200,7 +199,7 @@ def store_authorized_ips(valdata):
     user = os.environ['GL_USER']
     val_dir = os.path.join(os.environ['GL_ADMIN_BASE'], '2fa/validations')
     valfile = os.path.join(val_dir, '%s.js' % user)
-    jdata = anyjson.serialize(valdata)
+    jdata = json.dumps(valdata)
     fh = open(valfile, 'w')
     fh.write(jdata)
     fh.close()
@@ -286,7 +285,6 @@ def generate_user_token(backends, mode):
         tpt = Template(TOTP_USER_MASK)
         totp_user = tpt.safe_substitute(username=user)
         qr_uri = gaus.otp.provisioning_uri(totp_user)
-        import urllib
         print('')
         print('Please make sure "qrencode" is installed.')
         print('Run the following commands to display your QR code:')
@@ -299,7 +297,7 @@ def generate_user_token(backends, mode):
         print('and paste the following URL:')
         print(
             'https://www.google.com/chart?chs=200x200&chld=M|0&cht=qr&chl=%s' %
-            urllib.quote_plus(qr_uri))
+            quote_plus(qr_uri))
         print('')
         print('Scan the resulting QR code with your TOTP app, such as')
         print('FreeOTP (recommended), Google Authenticator, Authy, or others.')
@@ -324,7 +322,7 @@ def generate_user_token(backends, mode):
         print('Scratch tokens:')
         print('\n'.join(gaus.scratch_tokens))
 
-    print
+    print('')
 
     print('Now run the following command to verify that all went well')
 
@@ -393,7 +391,7 @@ def unenroll(backends):
 
     try:
         status = ga.verify_user_token(user, token)
-    except Exception, ex:
+    except Exception as ex:
         if ALLOW_BYPASS_OVERRIDE and token == 'override':
             status = "%s uses 'override'. It's super effective!" % user
             syslog.syslog(
@@ -443,7 +441,7 @@ def val(backends, hours=24, authorize_ip=None, session=False):
 
     try:
         status = ga.verify_user_token(user, token)
-    except Exception, ex:
+    except Exception as ex:
         if ALLOW_BYPASS_OVERRIDE and token == 'override':
             status = "%s uses 'override'. It's super effective!" % user
             syslog.syslog(
@@ -587,11 +585,11 @@ def main():
 
     # Create those two dirs if they don't exist
     if not os.path.exists(secrets_dir):
-        os.makedirs(secrets_dir, 0700)
+        os.makedirs(secrets_dir, 0o700)
         logger.info('Created %s' % secrets_dir)
 
     if not os.path.exists(state_dir):
-        os.makedirs(state_dir, 0700)
+        os.makedirs(state_dir, 0o700)
         logger.info('Created %s' % state_dir)
 
     backends.secret_backend = totpcgi.backends.file.GASecretBackend(secrets_dir)

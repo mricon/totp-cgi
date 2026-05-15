@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 ##
 # Copyright (C) 2012 by Konstantin Ryabitsev and contributors
@@ -18,14 +18,9 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
 # 02111-1307, USA.
 #
-from __future__ import (absolute_import,
-                        division,
-                        print_function,
-                        with_statement,
-                        unicode_literals)
-
 __author__ = 'Konstantin Ryabitsev <konstantin@linuxfoundation.org>'
 
+import configparser
 import os
 import sys
 import cgi
@@ -42,11 +37,6 @@ if len(sys.argv) > 1:
     config_file = sys.argv[1]
 else:
     config_file = '/etc/totpcgi/totpcgi.conf'
-
-try:
-    import configparser
-except ImportError:
-    import ConfigParser as configparser
 
 config = configparser.RawConfigParser()
 config.read(config_file)

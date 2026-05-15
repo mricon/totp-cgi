@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "totpcgi"
+version = "0.7.0"
+description = "A centralized hotp/totp solution based on google-authenticator"
+readme = "README.rst"
+requires-python = ">=3.9"
+license = { text = "GPL-2.0-or-later" }
+authors = [
+    { name = "Konstantin Ryabitsev", email = "mricon@kernel.org" },
+]
+dependencies = [
+    "pycryptodome",
+    "passlib",
+    "pyotp",
+    "bcrypt",
+]
+
+[project.optional-dependencies]
+cgi = ["flup", "qrcode"]
+ldap = ["python-ldap"]
+mysql = ["pymysql"]
+pgsql = ["psycopg2-binary"]
+
+[project.urls]
+Homepage = "https://github.com/mricon/totp-cgi"
+Issues = "https://github.com/mricon/totp-cgi/issues"
+
+[tool.setuptools]
+packages = ["totpcgi", "totpcgi.backends"]

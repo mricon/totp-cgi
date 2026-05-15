@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 ##
 # Copyright (C) 2012 by Konstantin Ryabitsev and contributors
@@ -18,38 +18,24 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
 # 02111-1307, USA.
 #
-from __future__ import (absolute_import,
-                        division,
-                        print_function,
-                        with_statement,
-                        unicode_literals)
-
 __author__ = 'Konstantin Ryabitsev <konstantin@linuxfoundation.org>'
 
+import configparser
+import html
 import os
 import sys
 import cgi
 import syslog
+
+from io import StringIO
+from string import Template
+from urllib.parse import quote
 
 import totpcgi
 import totpcgi.backends
 import totpcgi.utils
 
 import qrcode
-
-from string import Template
-
-try:
-    from io import StringIO
-except ImportError:
-    # noinspection PyCompatibility
-    from StringIO import StringIO
-
-try:
-    # noinspection PyCompatibility
-    from urllib.parse import quote
-except ImportError:
-    from urllib import quote
 
 import cgitb
 cgitb.enable()
@@ -60,12 +46,7 @@ if len(sys.argv) > 1:
 else:
     config_file = '/etc/totpcgi/provisioning.conf'
 
-try:
-    import configparser
-except ImportError:
-    import ConfigParser as configparser
-
-cfg = ConfigParser.RawConfigParser()
+cfg = configparser.RawConfigParser()
 cfg.read(config_file)
 
 backends = totpcgi.backends.Backends()
@@ -89,7 +70,7 @@ def bad_request(config, why):
     vals = {
             'action_url':   config.get('secret', 'action_url'),
             'css_root':     config.get('secret', 'css_root'),
-            'errormsg':     cgi.escape(why)
+            'errormsg':     html.escape(why)
     }
 
     out = tpt.safe_substitute(vals)
@@ -188,7 +169,7 @@ def show_totp_page(config, user, gaus):
     tpt = Template(config.get('secret', 'totp_user_mask'))
     try:
         totp_issuer = config.get('secret', 'totp_issuer')
-    except ConfigParser.NoOptionError:
+    except configparser.NoOptionError:
         totp_issuer = None
     totp_user = tpt.safe_substitute(username=user)
 
@@ -322,7 +303,7 @@ def cgimain():
 
     try:
         allow_reissue = cfg.getboolean('secret', 'allow_reissue')
-    except ConfigParser.NoOptionError:
+    except configparser.NoOptionError:
         allow_reissue = True
 
     if exists and action != 'reissue':

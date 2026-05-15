@@ -14,12 +14,6 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
 # 02111-1307, USA.
 #
-from __future__ import (absolute_import,
-                        division,
-                        print_function,
-                        with_statement,
-                        unicode_literals)
-
 __author__ = 'Konstantin Ryabitsev <konstantin@linuxfoundation.org>'
 
 import logging
@@ -175,9 +169,23 @@ class GAPincodeBackend:
     @staticmethod
     def _verify_by_hashcode(pincode, hashcode):
         logger.debug('Will test against %s', hashcode)
+
+        # bcrypt is handled directly because passlib 1.7.x is incompatible
+        # with bcrypt >= 4.1 — see hash_pincode() in totpcgi.utils.
+        if hashcode.startswith(('$2a$', '$2b$', '$2x$', '$2y$')):
+            import bcrypt
+            try:
+                matched = bcrypt.checkpw(pincode.encode('utf-8'),
+                                         hashcode.encode('utf-8'))
+            except ValueError:
+                raise totpcgi.UserPincodeError('Unsupported hashcode format')
+            if not matched:
+                raise totpcgi.UserPincodeError('Pincode did not match.')
+            return True
+
         from passlib.context import CryptContext
         myctx = CryptContext(schemes=['sha256_crypt', 'sha512_crypt',
-                                      'bcrypt', 'md5_crypt'])
+                                      'md5_crypt'])
 
         try:
             if not myctx.verify(pincode, hashcode):

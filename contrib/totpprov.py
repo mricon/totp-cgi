@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 ##
 # Copyright (C) 2012 by Konstantin Ryabitsev and contributors
@@ -18,38 +18,20 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
 # 02111-1307, USA.
 #
-from __future__ import (absolute_import,
-                        division,
-                        print_function,
-                        with_statement,
-                        unicode_literals)
-
 __author__ = 'Konstantin Ryabitsev <konstantin@linuxfoundation.org>'
 
+import configparser
+import getpass
 import sys
+import syslog
 
 from optparse import OptionParser
-
-try:
-    import configparser
-except ImportError:
-    import ConfigParser as configparser
+from string import Template
 
 import totpcgi
 import totpcgi.backends
 import totpcgi.utils
 
-import getpass
-
-from string import Template
-
-try:
-    # noinspection PyCompatibility
-    from urllib.parse import quote
-except ImportError:
-    from urllib import quote
-
-import syslog
 syslog.openlog('totpprov', syslog.LOG_PID, syslog.LOG_AUTH)
 
 
@@ -218,7 +200,7 @@ def generate_user_token(backends, config, args, pincode=None):
     tpt = Template(config.get('secret', 'totp_user_mask'))
     try:
         totp_issuer = config.get('secret', 'totp_issuer')
-    except ConfigParser.NoOptionError:
+    except configparser.NoOptionError:
         totp_issuer = None
     totp_user = tpt.safe_substitute(username=user)
 
@@ -278,7 +260,7 @@ if __name__ == '__main__':
 
     (opts, main_args) = parser.parse_args()
 
-    cfg = ConfigParser.RawConfigParser()
+    cfg = configparser.RawConfigParser()
     cfg.read(opts.config_file)
 
     # it's dirty, but stick hotp switch into the config object

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 ##
 # Copyright (C) 2012 by Konstantin Ryabitsev and contributors
@@ -18,34 +18,20 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
 # 02111-1307, USA.
 #
-
-from __future__ import (absolute_import,
-                        division,
-                        print_function,
-                        with_statement,
-                        unicode_literals)
-
+import configparser
 import sys
 import syslog
+
+from urllib.parse import parse_qs
 
 import totpcgi
 import totpcgi.backends
 
-try:
-    import configparser
-except ImportError:
-    import ConfigParser as configparser
-
 from flup.server import fcgi
-try:
-    # noinspection PyCompatibility
-    from urllib.parse import parse_qs
-except ImportError:
-    from cgi import parse_qs
 
 syslog.openlog(str('totp.fcgi'), syslog.LOG_PID, syslog.LOG_AUTH)
 
-config = ConfigParser.RawConfigParser()
+config = configparser.RawConfigParser()
 config.read('/etc/totpcgi/totpcgi.conf')
 
 require_pincode = config.getboolean('main', 'require_pincode')
