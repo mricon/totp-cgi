@@ -250,7 +250,7 @@ if __name__ == '__main__':
     for more info on commands.
     '''
 
-    parser = OptionParser(usage=usage, version='0.1')
+    parser = OptionParser(usage=usage, version='0.7.0')
     parser.add_option('-c', '--config', dest='config_file', 
                       default='/etc/totpcgi/provisioning.conf',
                       help='Path to provisioning.conf (%default)')
