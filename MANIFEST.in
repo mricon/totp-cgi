@@ -3,5 +3,6 @@ include *.rst
 include pyproject.toml
 include cgi/*
 recursive-include conf *
-include test*
+include test.py
+recursive-include test *
 recursive-include contrib *
