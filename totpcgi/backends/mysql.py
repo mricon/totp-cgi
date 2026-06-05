@@ -195,6 +195,9 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
                 logger.debug('No entries left for user=%s, deleting', user)
                 cur.execute('DELETE FROM users WHERE userid=%s', (userid,))
 
+                # remove from dictionary/cache
+                del userids[user]
+
         self.conn.commit()
 
 

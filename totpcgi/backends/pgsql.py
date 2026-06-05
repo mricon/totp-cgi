@@ -198,6 +198,9 @@ class GAStateBackend(totpcgi.backends.GAStateBackend):
                     # we may not have permissions, so ignore this failure.
                     pass
 
+                # remove from dictionary/cache
+                del userids[user]
+
         self.conn.commit()
 
 
